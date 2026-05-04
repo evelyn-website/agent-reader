@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Document, Page } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
+import { loadToc, type OutlineNode } from './loadToc'
 
 interface PDFViewerProps {
   data: ArrayBuffer
@@ -14,6 +15,7 @@ interface PDFViewerProps {
   onPageRenderSuccess: (n: number, height: number) => void
   onItemClick: (pageNumber: number) => void
   setPageDimensions: (dims: Map<number, number>) => void
+  setOutline: (outline: OutlineNode[]) => void
 }
 
 const HIDDEN_STYLE: React.CSSProperties = {
@@ -110,12 +112,16 @@ export default function PDFViewer({
   getPlaceholderHeight,
   onPageRenderSuccess,
   onItemClick,
-  setPageDimensions
+  setPageDimensions,
+  setOutline
 }: PDFViewerProps): React.JSX.Element {
   const file = useMemo(() => ({ data: new Uint8Array(data) }), [data])
 
   const onDocumentLoadSuccess = useCallback(
-    async (pdf: { numPages: number; getPage: (n: number) => Promise<{ getViewport: (p: { scale: number }) => { height: number } }> }) => {
+    async (pdf: {
+      numPages: number
+      getPage: (n: number) => Promise<{ getViewport: (p: { scale: number }) => { height: number } }>
+    }) => {
       const dims = new Map<number, number>()
       const pages = await Promise.all(
         Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1))
@@ -125,8 +131,10 @@ export default function PDFViewer({
       })
       setPageDimensions(dims)
       setNumPages(pdf.numPages)
+      const outline = await loadToc(pdf as unknown as Parameters<typeof loadToc>[0])
+      setOutline(outline)
     },
-    [setNumPages, setPageDimensions]
+    [setNumPages, setPageDimensions, setOutline]
   )
 
   return (

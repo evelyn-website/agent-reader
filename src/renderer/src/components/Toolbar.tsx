@@ -12,6 +12,9 @@ interface ToolbarProps {
   currentPage: number
   numPages: number
   onJumpToPage: (n: number) => void
+  showSidebarToggle: boolean
+  sidebarOpen: boolean
+  onToggleSidebar: () => void
 }
 
 export default function Toolbar({
@@ -25,7 +28,10 @@ export default function Toolbar({
   onZoomReset,
   currentPage,
   numPages,
-  onJumpToPage
+  onJumpToPage,
+  showSidebarToggle,
+  sidebarOpen,
+  onToggleSidebar
 }: ToolbarProps): React.JSX.Element {
   const [pageInput, setPageInput] = useState(String(currentPage))
 
@@ -35,6 +41,19 @@ export default function Toolbar({
 
   return (
     <div className="toolbar">
+      {showSidebarToggle && (
+        <button
+          className={`sidebar-toggle${sidebarOpen ? ' sidebar-toggle--active' : ''}`}
+          onClick={onToggleSidebar}
+          title="Toggle sidebar (⌘\\)"
+          aria-label="Toggle sidebar"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
+            <line x1="6" y1="2.5" x2="6" y2="13.5" />
+          </svg>
+        </button>
+      )}
       <button onClick={onOpen}>Open PDF</button>
       {filename && <span className="pdf-filename">{filename}</span>}
       <div className="toolbar-spacer" />
