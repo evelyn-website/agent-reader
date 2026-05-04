@@ -3,19 +3,26 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 const WINDOW_SIZE = 5
 const ESTIMATED_HEIGHT = 1100
 
-export function useWindowedPages(numPages: number): {
+export function useWindowedPages(
+  numPages: number,
+  scale: number
+): {
   currentPage: number
   inWindow: (n: number) => boolean
   setPageRef: (n: number, el: HTMLDivElement | null) => void
   getPlaceholderHeight: (n: number) => number
   onPageRenderSuccess: (n: number, height: number) => void
   scrollToPage: (n: number) => void
+  setPageDimensions: (dims: Map<number, number>) => void
 } {
   const [currentPage, setCurrentPage] = useState(1)
+  const [pageDimensions, setPageDimensions] = useState<Map<number, number>>(new Map())
   const pageHeights = useRef<Map<number, number>>(new Map())
   const observerRef = useRef<IntersectionObserver | null>(null)
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const visibilityMap = useRef<Map<number, number>>(new Map())
+  const pendingScrollTarget = useRef<number | null>(null)
+  const pendingScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (numPages === 0) return
@@ -68,17 +75,32 @@ export function useWindowedPages(numPages: number): {
   )
 
   const getPlaceholderHeight = useCallback(
-    (n: number) => pageHeights.current.get(n) ?? ESTIMATED_HEIGHT,
-    []
+    (n: number) => {
+      const raw = pageDimensions.get(n)
+      if (raw !== undefined) return raw * scale
+      return pageHeights.current.get(n) ?? ESTIMATED_HEIGHT
+    },
+    [pageDimensions, scale]
   )
 
   const onPageRenderSuccess = useCallback((n: number, height: number) => {
     pageHeights.current.set(n, height)
+    const target = pendingScrollTarget.current
+    if (target !== null) {
+      const el = pageRefs.current.get(target)
+      if (el) el.scrollIntoView({ block: 'start' })
+    }
   }, [])
 
   const scrollToPage = useCallback((n: number) => {
     const el = pageRefs.current.get(n)
-    if (el) el.scrollIntoView({ block: 'start' })
+    if (!el) return
+    el.scrollIntoView({ block: 'start' })
+    pendingScrollTarget.current = n
+    if (pendingScrollTimer.current) clearTimeout(pendingScrollTimer.current)
+    pendingScrollTimer.current = setTimeout(() => {
+      pendingScrollTarget.current = null
+    }, 800)
   }, [])
 
   return {
@@ -87,6 +109,7 @@ export function useWindowedPages(numPages: number): {
     setPageRef,
     getPlaceholderHeight,
     onPageRenderSuccess,
-    scrollToPage
+    scrollToPage,
+    setPageDimensions
   }
 }

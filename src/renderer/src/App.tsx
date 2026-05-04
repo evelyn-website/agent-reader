@@ -14,7 +14,7 @@ export default function App(): React.JSX.Element {
   const [pdf, setPdf] = useState<PdfFile | null>(null)
   const [numPages, setNumPages] = useState<number>(0)
   const { scale, zoomIn, zoomOut, zoomReset, atMin, atMax } = useZoom()
-  const windowed = useWindowedPages(numPages)
+  const windowed = useWindowedPages(numPages, scale)
 
   const handleOpen = async (): Promise<void> => {
     const path = await window.api.openPdf()
@@ -49,6 +49,8 @@ export default function App(): React.JSX.Element {
             setPageRef={windowed.setPageRef}
             getPlaceholderHeight={windowed.getPlaceholderHeight}
             onPageRenderSuccess={windowed.onPageRenderSuccess}
+            onItemClick={windowed.scrollToPage}
+            setPageDimensions={windowed.setPageDimensions}
           />
         ) : (
           <div className="empty-state">

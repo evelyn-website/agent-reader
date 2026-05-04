@@ -12,6 +12,8 @@ interface PDFViewerProps {
   setPageRef: (n: number, el: HTMLDivElement | null) => void
   getPlaceholderHeight: (n: number) => number
   onPageRenderSuccess: (n: number, height: number) => void
+  onItemClick: (pageNumber: number) => void
+  setPageDimensions: (dims: Map<number, number>) => void
 }
 
 const HIDDEN_STYLE: React.CSSProperties = {
@@ -106,15 +108,25 @@ export default function PDFViewer({
   inWindow,
   setPageRef,
   getPlaceholderHeight,
-  onPageRenderSuccess
+  onPageRenderSuccess,
+  onItemClick,
+  setPageDimensions
 }: PDFViewerProps): React.JSX.Element {
   const file = useMemo(() => ({ data: new Uint8Array(data) }), [data])
 
   const onDocumentLoadSuccess = useCallback(
-    ({ numPages }: { numPages: number }) => {
-      setNumPages(numPages)
+    async (pdf: { numPages: number; getPage: (n: number) => Promise<{ getViewport: (p: { scale: number }) => { height: number } }> }) => {
+      const dims = new Map<number, number>()
+      const pages = await Promise.all(
+        Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1))
+      )
+      pages.forEach((page, i) => {
+        dims.set(i + 1, page.getViewport({ scale: 1 }).height)
+      })
+      setPageDimensions(dims)
+      setNumPages(pdf.numPages)
     },
-    [setNumPages]
+    [setNumPages, setPageDimensions]
   )
 
   return (
@@ -124,6 +136,7 @@ export default function PDFViewer({
           file={file}
           onLoadSuccess={onDocumentLoadSuccess}
           onLoadError={(err) => console.error('PDF load error:', err)}
+          onItemClick={({ pageNumber }) => onItemClick(pageNumber)}
         >
           {Array.from({ length: numPages }, (_, i) => {
             const n = i + 1
