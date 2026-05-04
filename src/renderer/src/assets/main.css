@@ -1,0 +1,103 @@
+@import './base.css';
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  user-select: none;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── App layout ── */
+
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--color-background-mute);
+  border-bottom: 1px solid var(--ev-c-gray-1);
+  flex-shrink: 0;
+}
+
+.toolbar button {
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--ev-button-alt-border);
+  background: var(--ev-button-alt-bg);
+  color: var(--ev-button-alt-text);
+  font-size: 13px;
+}
+
+.toolbar button:hover {
+  background: var(--ev-button-alt-hover-bg);
+}
+
+.pdf-filename {
+  font-size: 13px;
+  color: var(--ev-c-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-area {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ev-c-text-2);
+  font-size: 15px;
+}
+
+/* ── PDF viewer ── */
+
+.pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.pdf-document {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  user-select: text;
+}
+
+.pdf-page-wrapper {
+  width: fit-content;
+  flex-shrink: 0;
+}
+
+.react-pdf__Page {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
