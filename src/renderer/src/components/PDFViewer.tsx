@@ -1,22 +1,121 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Document, Page } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
-import { useWindowedPages } from './useWindowedPages'
 
 interface PDFViewerProps {
   data: ArrayBuffer
+  scale: number
+  numPages: number
+  setNumPages: (n: number) => void
+  inWindow: (n: number) => boolean
+  setPageRef: (n: number, el: HTMLDivElement | null) => void
+  getPlaceholderHeight: (n: number) => number
+  onPageRenderSuccess: (n: number, height: number) => void
 }
 
-export default function PDFViewer({ data }: PDFViewerProps): React.JSX.Element {
-  const [numPages, setNumPages] = useState<number>(0)
-  const file = useMemo(() => ({ data: new Uint8Array(data) }), [data])
-  const { inWindow, setPageRef, getPlaceholderHeight, onPageRenderSuccess } =
-    useWindowedPages(numPages)
+const HIDDEN_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  opacity: 0,
+  pointerEvents: 'none'
+}
 
-  const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    setNumPages(numPages)
-  }, [])
+interface SwappablePageProps {
+  pageNumber: number
+  scale: number
+  onRendered: (height: number) => void
+}
+
+const BACK_SLOT_TEARDOWN_MS = 500
+
+function SwappablePage({ pageNumber, scale, onRendered }: SwappablePageProps): React.JSX.Element {
+  const [slots, setSlots] = useState<{ a: number | null; b: number | null }>({
+    a: scale,
+    b: null
+  })
+  const [front, setFront] = useState<'a' | 'b'>('a')
+
+  useEffect(() => {
+    const frontScale = front === 'a' ? slots.a : slots.b
+    if (scale === frontScale) return
+    setSlots((s) => (front === 'a' ? { ...s, b: scale } : { ...s, a: scale }))
+  }, [scale, front, slots.a, slots.b])
+
+  useEffect(() => {
+    const frontScale = front === 'a' ? slots.a : slots.b
+    const backScale = front === 'a' ? slots.b : slots.a
+    if (scale !== frontScale || backScale === null) return
+    const t = setTimeout(() => {
+      setSlots((s) => (front === 'a' ? { ...s, b: null } : { ...s, a: null }))
+    }, BACK_SLOT_TEARDOWN_MS)
+    return () => clearTimeout(t)
+  }, [scale, front, slots.a, slots.b])
+
+  const handleRendered = (slot: 'a' | 'b', slotScale: number, height: number): void => {
+    if (slot !== front && slotScale === scale) {
+      setFront(slot)
+    }
+    onRendered(height)
+  }
+
+  const frontScale = (front === 'a' ? slots.a : slots.b) ?? scale
+  const previewZoom = scale / frontScale
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        ...(previewZoom === 1 ? undefined : { zoom: previewZoom })
+      }}
+    >
+      {slots.a !== null && (
+        <div style={front === 'a' ? undefined : HIDDEN_STYLE}>
+          <Page
+            key={`a-${slots.a}`}
+            pageNumber={pageNumber}
+            scale={slots.a}
+            renderTextLayer={true}
+            renderAnnotationLayer={true}
+            onRenderSuccess={({ height }) => handleRendered('a', slots.a!, height)}
+          />
+        </div>
+      )}
+      {slots.b !== null && (
+        <div style={front === 'b' ? undefined : HIDDEN_STYLE}>
+          <Page
+            key={`b-${slots.b}`}
+            pageNumber={pageNumber}
+            scale={slots.b}
+            renderTextLayer={true}
+            renderAnnotationLayer={true}
+            onRenderSuccess={({ height }) => handleRendered('b', slots.b!, height)}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function PDFViewer({
+  data,
+  scale,
+  numPages,
+  setNumPages,
+  inWindow,
+  setPageRef,
+  getPlaceholderHeight,
+  onPageRenderSuccess
+}: PDFViewerProps): React.JSX.Element {
+  const file = useMemo(() => ({ data: new Uint8Array(data) }), [data])
+
+  const onDocumentLoadSuccess = useCallback(
+    ({ numPages }: { numPages: number }) => {
+      setNumPages(numPages)
+    },
+    [setNumPages]
+  )
 
   return (
     <div className="pdf-viewer">
@@ -36,11 +135,10 @@ export default function PDFViewer({ data }: PDFViewerProps): React.JSX.Element {
                 style={inWindow(n) ? undefined : { height: getPlaceholderHeight(n) }}
               >
                 {inWindow(n) ? (
-                  <Page
+                  <SwappablePage
                     pageNumber={n}
-                    renderTextLayer={true}
-                    renderAnnotationLayer={true}
-                    onRenderSuccess={({ height }) => onPageRenderSuccess(n, height)}
+                    scale={scale}
+                    onRendered={(height) => onPageRenderSuccess(n, height)}
                   />
                 ) : null}
               </div>

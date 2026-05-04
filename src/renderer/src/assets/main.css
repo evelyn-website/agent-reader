@@ -29,11 +29,38 @@ body {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   padding: 8px 12px;
   background: var(--color-background-mute);
   border-bottom: 1px solid var(--ev-c-gray-1);
   flex-shrink: 0;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.zoom-label {
+  font-size: 13px;
+  color: var(--ev-c-text-2);
+  min-width: 44px;
+  text-align: center;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.zoom-label:hover {
+  background: var(--ev-button-alt-hover-bg);
+  border-color: var(--ev-button-alt-border);
 }
 
 .toolbar button {
@@ -100,4 +127,48 @@ body {
 
 .react-pdf__Page {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.pdf-document::-webkit-scrollbar {
+  width: 12px;
+}
+
+.pdf-document::-webkit-scrollbar-track {
+  background: var(--color-background-mute);
+}
+
+.pdf-document::-webkit-scrollbar-thumb {
+  background: var(--ev-c-gray-2);
+  border-radius: 6px;
+  border: 2px solid var(--color-background-mute);
+}
+
+.pdf-document::-webkit-scrollbar-thumb:hover {
+  background: var(--ev-c-gray-1);
+}
+
+/* ── Page indicator ── */
+
+.page-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ev-c-text-2);
+}
+
+.page-indicator input {
+  width: 44px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--ev-button-alt-border);
+  background: var(--ev-button-alt-bg);
+  color: var(--ev-button-alt-text);
+  font-size: 13px;
+  text-align: center;
+  font-family: inherit;
+}
+
+.page-indicator input:focus {
+  outline: 1px solid var(--ev-c-gray-1);
 }

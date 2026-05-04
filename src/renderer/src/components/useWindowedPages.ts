@@ -4,10 +4,12 @@ const WINDOW_SIZE = 5
 const ESTIMATED_HEIGHT = 1100
 
 export function useWindowedPages(numPages: number): {
+  currentPage: number
   inWindow: (n: number) => boolean
   setPageRef: (n: number, el: HTMLDivElement | null) => void
   getPlaceholderHeight: (n: number) => number
   onPageRenderSuccess: (n: number, height: number) => void
+  scrollToPage: (n: number) => void
 } {
   const [currentPage, setCurrentPage] = useState(1)
   const pageHeights = useRef<Map<number, number>>(new Map())
@@ -74,5 +76,17 @@ export function useWindowedPages(numPages: number): {
     pageHeights.current.set(n, height)
   }, [])
 
-  return { inWindow, setPageRef, getPlaceholderHeight, onPageRenderSuccess }
+  const scrollToPage = useCallback((n: number) => {
+    const el = pageRefs.current.get(n)
+    if (el) el.scrollIntoView({ block: 'start' })
+  }, [])
+
+  return {
+    currentPage,
+    inWindow,
+    setPageRef,
+    getPlaceholderHeight,
+    onPageRenderSuccess,
+    scrollToPage
+  }
 }
