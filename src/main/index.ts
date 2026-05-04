@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, globalShortcut } from 'electron'
 import { join } from 'path'
 import { readFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -18,8 +18,20 @@ function createWindow(): void {
     }
   })
 
+  mainWindow.webContents.setVisualZoomLevelLimits(1, 1)
+
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+  })
+
+  mainWindow.on('focus', () => {
+    globalShortcut.register('CommandOrControl+=', () => mainWindow.webContents.send('zoom', 'Equal'))
+    globalShortcut.register('CommandOrControl+-', () => mainWindow.webContents.send('zoom', 'Minus'))
+    globalShortcut.register('CommandOrControl+0', () => mainWindow.webContents.send('zoom', 'Digit0'))
+  })
+
+  mainWindow.on('blur', () => {
+    globalShortcut.unregisterAll()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -27,8 +39,6 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
