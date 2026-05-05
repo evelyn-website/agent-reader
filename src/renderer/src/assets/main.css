@@ -240,12 +240,16 @@ body {
 .pdf-document {
   flex: 1;
   overflow: auto;
+  user-select: text;
+}
+
+.pdf-pages-inner {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
   padding: 16px;
-  user-select: text;
+  min-width: fit-content;
 }
 
 .pdf-page-wrapper {

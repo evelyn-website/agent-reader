@@ -140,6 +140,7 @@ export default function PDFViewer({
   return (
     <div className="pdf-viewer">
       <div className="pdf-document">
+        <div className="pdf-pages-inner">
         <Document
           file={file}
           onLoadSuccess={onDocumentLoadSuccess}
@@ -153,7 +154,7 @@ export default function PDFViewer({
                 key={n}
                 ref={(el) => setPageRef(n, el)}
                 className="pdf-page-wrapper"
-                style={inWindow(n) ? undefined : { height: getPlaceholderHeight(n) }}
+                style={{ height: getPlaceholderHeight(n), overflow: 'hidden' }}
               >
                 {inWindow(n) ? (
                   <SwappablePage
@@ -166,6 +167,7 @@ export default function PDFViewer({
             )
           })}
         </Document>
+        </div>
       </div>
     </div>
   )
