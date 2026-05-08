@@ -1,9 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { DocumentRow } from '../main/db'
+
+export type ReadPdfResult = { data: Buffer; document: DocumentRow }
 
 const api = {
   openPdf: (): Promise<string | null> => ipcRenderer.invoke('pdf:open'),
-  readPdf: (filePath: string): Promise<Buffer> => ipcRenderer.invoke('pdf:read', filePath)
+  readPdf: (filePath: string): Promise<ReadPdfResult> => ipcRenderer.invoke('pdf:read', filePath)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

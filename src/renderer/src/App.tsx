@@ -40,7 +40,7 @@ export default function App(): React.JSX.Element {
   const handleOpen = async (): Promise<void> => {
     const path = await window.api.openPdf()
     if (!path) return
-    const data = await window.api.readPdf(path)
+    const { data } = await window.api.readPdf(path)
     setOutline([])
     setSearchIndex(null)
     setSidebarOpen(true)

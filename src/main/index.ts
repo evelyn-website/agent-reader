@@ -3,6 +3,7 @@ import { join } from 'path'
 import { readFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { initDb, recordOpen } from './db'
 
 function createWindow(): void {
   // Create the browser window.
@@ -53,6 +54,8 @@ app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
+  initDb()
+
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
   // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
@@ -71,7 +74,9 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('pdf:read', (_event, filePath: string) => {
-    return readFileSync(filePath)
+    const data = readFileSync(filePath)
+    const document = recordOpen({ path: filePath, data })
+    return { data, document }
   })
 
   createWindow()
