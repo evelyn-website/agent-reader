@@ -9,6 +9,7 @@ export function useZoom(): {
   zoomIn: () => void
   zoomOut: () => void
   zoomReset: () => void
+  zoomTo: (target: number) => void
   atMin: boolean
   atMax: boolean
 } {
@@ -23,6 +24,11 @@ export function useZoom(): {
     []
   )
   const zoomReset = useCallback(() => setScale(1.0), [])
+  const zoomTo = useCallback(
+    (target: number) =>
+      setScale(parseFloat(Math.max(MIN_SCALE, Math.min(MAX_SCALE, target)).toFixed(2))),
+    []
+  )
 
   useEffect(() => {
     const handler = (_: unknown, code: string): void => {
@@ -36,5 +42,5 @@ export function useZoom(): {
     }
   }, [zoomIn, zoomOut, zoomReset])
 
-  return { scale, zoomIn, zoomOut, zoomReset, atMin: scale <= MIN_SCALE, atMax: scale >= MAX_SCALE }
+  return { scale, zoomIn, zoomOut, zoomReset, zoomTo, atMin: scale <= MIN_SCALE, atMax: scale >= MAX_SCALE }
 }

@@ -4,7 +4,9 @@ import Toolbar from './components/Toolbar'
 import OutlineSidebar from './components/OutlineSidebar'
 import { useZoom } from './components/useZoom'
 import { useWindowedPages } from './components/useWindowedPages'
+import { useSearch } from './components/useSearch'
 import type { OutlineNode } from './components/loadToc'
+import type { SearchIndex } from './components/buildSearchIndex'
 import './assets/main.css'
 
 interface PdfFile {
@@ -30,14 +32,17 @@ export default function App(): React.JSX.Element {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [outline.length, toggleSidebar])
-  const { scale, zoomIn, zoomOut, zoomReset, atMin, atMax } = useZoom()
+  const { scale, zoomIn, zoomOut, zoomReset, zoomTo, atMin, atMax } = useZoom()
   const windowed = useWindowedPages(numPages, scale)
+  const [searchIndex, setSearchIndex] = useState<SearchIndex | null>(null)
+  const search = useSearch(searchIndex, windowed.scrollToPage)
 
   const handleOpen = async (): Promise<void> => {
     const path = await window.api.openPdf()
     if (!path) return
     const data = await window.api.readPdf(path)
     setOutline([])
+    setSearchIndex(null)
     setSidebarOpen(true)
     setPdf({ path, data })
   }
@@ -73,15 +78,18 @@ export default function App(): React.JSX.Element {
             <PDFViewer
               data={pdf.data}
               scale={scale}
-              numPages={numPages}
               setNumPages={setNumPages}
-              inWindow={windowed.inWindow}
+              layout={windowed.layout}
               setPageRef={windowed.setPageRef}
               getPlaceholderHeight={windowed.getPlaceholderHeight}
               onPageRenderSuccess={windowed.onPageRenderSuccess}
               onItemClick={windowed.scrollToPage}
               setPageDimensions={windowed.setPageDimensions}
               setOutline={setOutline}
+              setSearchIndex={setSearchIndex}
+              onZoomTo={zoomTo}
+              search={search}
+              searchIndexReady={searchIndex !== null}
             />
           </>
         ) : (
