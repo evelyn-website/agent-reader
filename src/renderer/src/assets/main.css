@@ -29,10 +29,11 @@ body {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--color-background-mute);
-  border-bottom: 1px solid var(--ev-c-gray-1);
+  gap: 6px;
+  height: 44px;
+  padding: 0 12px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
@@ -40,62 +41,106 @@ body {
   flex: 1;
 }
 
+/* Shared button language — direct children only, so it doesn't clobber
+   nested buttons inside segmented pills (.annotation-controls, .zoom-controls). */
+.toolbar > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 6px 10px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: inherit;
+  transition:
+    background-color 80ms ease-out,
+    color 80ms ease-out,
+    border-color 80ms ease-out;
+}
+
+.toolbar > button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.toolbar > button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.toolbar > button.sidebar-toggle {
+  width: 28px;
+  padding: 0;
+}
+
+.toolbar > button.sidebar-toggle--active {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+
+/* Segmented pill (zoom controls + annotation controls) */
 .zoom-controls {
   display: flex;
   align-items: center;
   gap: 2px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
 }
 
-.zoom-label {
-  font-size: 13px;
-  color: var(--ev-c-text-2);
-  min-width: 44px;
-  text-align: center;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  background: transparent;
-}
-
-.zoom-label:hover {
-  background: var(--ev-button-alt-hover-bg);
-  border-color: var(--ev-button-alt-border);
-}
-
-.toolbar button {
-  cursor: pointer;
-  padding: 4px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--ev-button-alt-border);
-  background: var(--ev-button-alt-bg);
-  color: var(--ev-button-alt-text);
-  font-size: 13px;
-}
-
-.toolbar button:hover {
-  background: var(--ev-button-alt-hover-bg);
-}
-
-.toolbar button.sidebar-toggle {
+.zoom-controls button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
-  color: var(--ev-c-text-2);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 5px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 80ms ease-out,
+    color 80ms ease-out;
 }
 
-.toolbar button.sidebar-toggle--active {
-  color: var(--ev-c-text-1);
-  background: var(--ev-button-alt-hover-bg);
+.zoom-controls button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.zoom-controls button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.zoom-controls button.zoom-label {
+  width: auto;
+  min-width: 44px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .pdf-filename {
   font-size: 13px;
-  color: var(--ev-c-text-2);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding: 0 4px;
 }
 
 .main-area {
@@ -290,25 +335,30 @@ body {
 .page-indicator {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--ev-c-text-2);
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .page-indicator input {
   width: 44px;
   padding: 4px 6px;
   border-radius: 6px;
-  border: 1px solid var(--ev-button-alt-border);
-  background: var(--ev-button-alt-bg);
-  color: var(--ev-button-alt-text);
-  font-size: 13px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: 12px;
   text-align: center;
-  font-family: inherit;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  transition: border-color 80ms ease-out;
 }
 
 .page-indicator input:focus {
-  outline: 1px solid var(--ev-c-gray-1);
+  border-color: var(--accent);
 }
 
 /* ── Search bar ── */
@@ -321,65 +371,84 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 8px;
-  background: var(--color-background-mute);
-  border: 1px solid var(--ev-c-gray-1);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 6px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  box-shadow: var(--shadow-popover);
   user-select: none;
 }
 
 .search-bar__input {
   width: 200px;
-  padding: 4px 8px;
+  padding: 5px 8px;
   border-radius: 6px;
-  border: 1px solid var(--ev-button-alt-border);
-  background: var(--ev-button-alt-bg);
-  color: var(--ev-button-alt-text);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+  color: var(--text-primary);
   font-size: 13px;
   font-family: inherit;
+  outline: none;
+  transition: border-color 80ms ease-out;
+}
+
+.search-bar__input::placeholder {
+  color: var(--text-tertiary);
 }
 
 .search-bar__input:focus {
-  outline: 1px solid var(--ev-c-gray-1);
+  border-color: var(--accent);
 }
 
 .search-bar__count {
-  font-size: 12px;
-  color: var(--ev-c-text-2);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
   min-width: 56px;
   text-align: center;
 }
 
 .search-bar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--ev-button-alt-border);
-  background: var(--ev-button-alt-bg);
-  color: var(--ev-button-alt-text);
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
   font-size: 13px;
+  font-family: inherit;
   line-height: 1;
+  transition:
+    background-color 80ms ease-out,
+    color 80ms ease-out,
+    border-color 80ms ease-out;
 }
 
 .search-bar__btn:hover:not(:disabled) {
-  background: var(--ev-button-alt-hover-bg);
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .search-bar__btn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: default;
 }
 
 .search-bar__toggle--active {
-  background: var(--ev-button-alt-hover-bg);
-  border-color: var(--ev-c-gray-1);
-  color: var(--ev-c-text-1);
+  background: var(--surface-2);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
 }
 
 .search-bar__close {
-  font-size: 16px;
-  padding: 2px 8px;
+  font-size: 15px;
+  color: var(--text-tertiary);
 }
 
 /* ── Match highlights inside PDF text layer ── */
@@ -391,4 +460,491 @@ body {
   padding: 0;
   /* The text layer's span uses color: transparent for selectable-but-invisible
      text; mark inherits that, so the highlight is just a colored backdrop. */
+}
+
+/* ── User annotations ── */
+
+.annotation-overlay-host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.annotation-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.annotation-layer > *,
+.annotation-highlight,
+.annotation-pin,
+.annotation-popover-anchor {
+  pointer-events: auto;
+}
+
+.annotation-highlight {
+  position: absolute;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  mix-blend-mode: multiply;
+  border-radius: 1px;
+  transition: filter 120ms;
+  z-index: 1;
+}
+
+.annotation-highlight:hover {
+  filter: brightness(0.93);
+}
+
+.annotation-highlight__dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1.5px var(--surface-1);
+  pointer-events: none;
+}
+
+.annotation-highlight--yellow {
+  background: rgba(255, 220, 0, 0.5);
+}
+
+.annotation-highlight--green {
+  background: rgba(80, 220, 100, 0.45);
+}
+
+.annotation-highlight--blue {
+  background: rgba(80, 170, 255, 0.45);
+}
+
+.annotation-highlight--pink {
+  background: rgba(255, 120, 180, 0.45);
+}
+
+.annotation-highlight--orange {
+  background: rgba(255, 160, 60, 0.5);
+}
+
+.annotation-pin {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  margin-top: -6px;
+  padding: 0;
+  border: none;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow:
+    0 0 0 2px var(--surface-1),
+    0 1px 4px rgba(0, 0, 0, 0.5);
+  transition:
+    box-shadow 200ms ease,
+    background-color 120ms ease;
+}
+
+.annotation-pin:hover {
+  background: var(--accent-hover);
+  box-shadow:
+    0 0 0 3px var(--surface-1),
+    0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+.annotation-pin--has-comment::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.pdf-viewer--note-mode .pdf-document {
+  cursor: crosshair;
+}
+
+.pdf-viewer--note-mode .react-pdf__Page__textContent {
+  cursor: crosshair;
+}
+
+.annotation-popover-anchor {
+  position: absolute;
+  z-index: 10;
+}
+
+/* ── Comment popover ── */
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.annotation-popover {
+  background: var(--surface-1);
+  border-radius: 10px;
+  box-shadow: var(--shadow-popover);
+  padding: 10px 12px 12px;
+  min-width: 260px;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: auto;
+  color: var(--text-primary);
+  animation: popover-in 120ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.annotation-popover__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.annotation-popover__kind {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+
+.annotation-popover__time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.annotation-popover__colors {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.annotation-popover__color {
+  position: relative;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+  transition: filter 100ms ease-out;
+}
+
+.annotation-popover__color:hover {
+  filter: brightness(1.12);
+}
+
+.annotation-popover__color--active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.annotation-popover__textarea {
+  resize: vertical;
+  min-height: 60px;
+  font: 13px/1.5 Inter, system-ui, sans-serif;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 8px 10px;
+  outline: none;
+  transition: border-color 80ms ease-out;
+}
+
+.annotation-popover__textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.annotation-popover__textarea:focus {
+  border-color: var(--accent);
+}
+
+.annotation-popover__body {
+  font: 13px/1.5 Inter, system-ui, sans-serif;
+  color: var(--text-primary);
+  padding: 8px 10px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: text;
+  min-height: 36px;
+  transition: background-color 80ms ease-out;
+}
+
+.annotation-popover__body:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.annotation-popover__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.annotation-popover__delete {
+  background: transparent;
+  border: none;
+  padding: 4px 2px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: inherit;
+  transition: color 80ms ease-out;
+}
+
+.annotation-popover__delete:hover {
+  color: var(--danger);
+}
+
+.annotation-popover__save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 80ms ease-out;
+}
+
+.annotation-popover__save:hover {
+  background: var(--accent-hover);
+}
+
+.annotation-popover__edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 80ms ease-out;
+}
+
+.annotation-popover__edit:hover {
+  background: var(--accent-hover);
+}
+
+.annotation-popover__kbd {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+  padding: 1px 4px;
+  letter-spacing: 0.04em;
+}
+
+/* ── Annotation toolbar group ── */
+
+.annotation-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.annotation-swatch {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  padding: 0;
+  cursor: pointer;
+  transition:
+    background-color 100ms ease-out,
+    opacity 100ms ease-out;
+}
+
+.annotation-swatch:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.annotation-swatch:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+.annotation-swatch::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--swatch-color, #fff);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+  transition: filter 100ms ease-out;
+}
+
+.annotation-swatch:hover:not(:disabled)::before {
+  filter: brightness(1.12);
+}
+
+.annotation-swatch--active::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--swatch-color, #fff);
+}
+
+/* Shortcut hint chip — appears on group hover */
+.annotation-controls__shortcuts {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  display: flex;
+  gap: 2px;
+  padding: 0 3px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.annotation-controls {
+  position: relative;
+}
+
+.annotation-controls:hover .annotation-controls__shortcuts {
+  opacity: 1;
+}
+
+.annotation-controls__shortcut {
+  width: 22px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.annotation-swatch--yellow {
+  --swatch-color: rgb(255, 220, 0);
+}
+
+.annotation-swatch--green {
+  --swatch-color: rgb(80, 220, 100);
+}
+
+.annotation-swatch--blue {
+  --swatch-color: rgb(80, 170, 255);
+}
+
+.annotation-swatch--pink {
+  --swatch-color: rgb(255, 120, 180);
+}
+
+.annotation-swatch--orange {
+  --swatch-color: rgb(255, 160, 60);
+}
+
+/* Color dots inside the popover use the same palette via CSS var */
+.annotation-popover__color--yellow {
+  background: rgb(255, 220, 0);
+  color: rgb(255, 220, 0);
+}
+
+.annotation-popover__color--green {
+  background: rgb(80, 220, 100);
+  color: rgb(80, 220, 100);
+}
+
+.annotation-popover__color--blue {
+  background: rgb(80, 170, 255);
+  color: rgb(80, 170, 255);
+}
+
+.annotation-popover__color--pink {
+  background: rgb(255, 120, 180);
+  color: rgb(255, 120, 180);
+}
+
+.annotation-popover__color--orange {
+  background: rgb(255, 160, 60);
+  color: rgb(255, 160, 60);
+}
+
+.note-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition:
+    background-color 100ms ease-out,
+    color 100ms ease-out;
+}
+
+.note-toggle:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.note-toggle--active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.note-toggle--active:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
 }

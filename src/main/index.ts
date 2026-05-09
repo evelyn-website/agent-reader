@@ -3,7 +3,16 @@ import { join } from 'path'
 import { readFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { initDb, recordOpen } from './db'
+import {
+  initDb,
+  recordOpen,
+  listAnnotations,
+  createAnnotation,
+  updateAnnotation,
+  deleteAnnotation,
+  type CreateAnnotationInput,
+  type UpdateAnnotationInput
+} from './db'
 
 function createWindow(): void {
   // Create the browser window.
@@ -77,6 +86,26 @@ app.whenReady().then(() => {
     const data = readFileSync(filePath)
     const document = recordOpen({ path: filePath, data })
     return { data, document }
+  })
+
+  ipcMain.handle('annotations:list', (_event, documentId: string) => {
+    return listAnnotations(documentId)
+  })
+
+  ipcMain.handle('annotations:create', (_event, input: CreateAnnotationInput) => {
+    return createAnnotation(input)
+  })
+
+  ipcMain.handle(
+    'annotations:update',
+    (_event, id: string, patch: UpdateAnnotationInput) => {
+      return updateAnnotation(id, patch)
+    }
+  )
+
+  ipcMain.handle('annotations:delete', (_event, id: string) => {
+    deleteAnnotation(id)
+    return null
   })
 
   createWindow()

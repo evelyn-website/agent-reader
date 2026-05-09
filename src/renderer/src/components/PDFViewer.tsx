@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { Document, Page } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
@@ -9,6 +9,13 @@ import { buildSearchIndex } from './buildSearchIndex'
 import SearchBar from './SearchBar'
 import type { UseSearchResult } from './useSearch'
 import { createDebug } from '../lib/debug'
+import AnnotationLayer from './AnnotationLayer'
+import {
+  HIGHLIGHT_COLORS,
+  type HighlightColor,
+  type UseAnnotationsResult
+} from './useAnnotations'
+import { captureSelection, pointToPageCoord } from './captureSelection'
 
 type TextRenderer = (props: { pageNumber: number; itemIndex: number; str: string }) => string
 
@@ -29,6 +36,13 @@ interface PDFViewerProps {
   onZoomTo: (scale: number) => void
   search: UseSearchResult
   searchIndexReady: boolean
+  annotations: UseAnnotationsResult
+  noteMode: boolean
+  setNoteMode: (v: boolean) => void
+}
+
+export interface PDFViewerHandle {
+  triggerHighlight: (color: HighlightColor) => void
 }
 
 const HIDDEN_STYLE: React.CSSProperties = {
@@ -43,6 +57,7 @@ interface SwappablePageProps {
   scale: number
   onRendered: (height: number) => void
   customTextRenderer?: TextRenderer
+  renderOverlay?: (frontScale: number) => React.ReactNode
 }
 
 const BACK_SLOT_TEARDOWN_MS = 500
@@ -56,7 +71,8 @@ function SwappablePage({
   pageNumber,
   scale,
   onRendered,
-  customTextRenderer
+  customTextRenderer,
+  renderOverlay
 }: SwappablePageProps): React.JSX.Element {
   const [slots, setSlots] = useState<{ a: number | null; b: number | null }>({
     a: scale,
@@ -162,6 +178,9 @@ function SwappablePage({
           />
         </div>
       )}
+      {renderOverlay && (
+        <div className="annotation-overlay-host">{renderOverlay(frontScale)}</div>
+      )}
     </div>
   )
 }
@@ -172,7 +191,9 @@ function renderWindow(
   setPageRef: (n: number, el: HTMLDivElement | null) => void,
   getPlaceholderHeight: (n: number) => number,
   onPageRenderSuccess: (n: number, height: number) => void,
-  customTextRenderer: TextRenderer | undefined
+  customTextRenderer: TextRenderer | undefined,
+  renderPageOverlay: (n: number, frontScale: number) => React.ReactNode,
+  onPageMouseDown: (n: number, e: React.MouseEvent) => void | Promise<void>
 ): React.JSX.Element[] {
   const out: React.JSX.Element[] = []
   for (let n = range.from; n <= range.to; n++) {
@@ -182,12 +203,15 @@ function renderWindow(
         ref={(el) => setPageRef(n, el)}
         className="pdf-page-wrapper"
         style={{ height: getPlaceholderHeight(n), overflow: 'hidden' }}
+        data-page-number={n}
+        onMouseDown={(e) => void onPageMouseDown(n, e)}
       >
         <SwappablePage
           pageNumber={n}
           scale={scale}
           onRendered={(height) => onPageRenderSuccess(n, height)}
           customTextRenderer={customTextRenderer}
+          renderOverlay={(frontScale) => renderPageOverlay(n, frontScale)}
         />
       </div>
     )
@@ -231,26 +255,96 @@ function buildTextRenderer(regex: RegExp | null): TextRenderer | undefined {
   }
 }
 
-export default function PDFViewer({
-  data,
-  scale,
-  setNumPages,
-  layout,
-  setPageRef,
-  getPlaceholderHeight,
-  onPageRenderSuccess,
-  onItemClick,
-  setPageDimensions,
-  setOutline,
-  setSearchIndex,
-  onZoomTo,
-  search,
-  searchIndexReady
-}: PDFViewerProps): React.JSX.Element {
+function PDFViewerInner(
+  {
+    data,
+    scale,
+    setNumPages,
+    layout,
+    setPageRef,
+    getPlaceholderHeight,
+    onPageRenderSuccess,
+    onItemClick,
+    setPageDimensions,
+    setOutline,
+    setSearchIndex,
+    onZoomTo,
+    search,
+    searchIndexReady,
+    annotations,
+    noteMode,
+    setNoteMode
+  }: PDFViewerProps,
+  ref: React.Ref<PDFViewerHandle>
+): React.JSX.Element {
   const file = useMemo(() => ({ data: new Uint8Array(data) }), [data])
   const containerRef = useRef<HTMLDivElement>(null)
   const scaleRef = useRef(scale)
   scaleRef.current = scale
+  const pageRefsLocal = useRef<Map<number, HTMLDivElement>>(new Map())
+  const lastColorRef = useRef<HighlightColor>('yellow')
+  const noteModeRef = useRef(noteMode)
+  noteModeRef.current = noteMode
+
+  const { byPage: annotationsByPage, createHighlight, createNote, updateAnnotation, deleteAnnotation } = annotations
+
+  const setPageRefCombined = useCallback(
+    (n: number, el: HTMLDivElement | null) => {
+      setPageRef(n, el)
+      if (el) pageRefsLocal.current.set(n, el)
+      else pageRefsLocal.current.delete(n)
+    },
+    [setPageRef]
+  )
+
+  const [openAnnotationId, setOpenAnnotationId] = useState<string | null>(null)
+  const justCreatedIdRef = useRef<string | null>(null)
+
+  const triggerHighlight = useCallback(
+    async (color: HighlightColor, openEditor = false): Promise<void> => {
+      const cap = captureSelection(pageRefsLocal.current, scaleRef.current)
+      if (!cap) return
+      window.getSelection()?.removeAllRanges()
+      lastColorRef.current = color
+      const ann = await createHighlight({
+        pageNumber: cap.pageNumber,
+        rects: cap.rects,
+        color,
+        text: cap.text
+      })
+      if (openEditor && ann) {
+        justCreatedIdRef.current = ann.id
+        setOpenAnnotationId(ann.id)
+      }
+    },
+    [createHighlight]
+  )
+
+  useImperativeHandle(ref, () => ({ triggerHighlight: (c) => void triggerHighlight(c) }), [
+    triggerHighlight
+  ])
+
+  const handlePageMouseDown = useCallback(
+    async (pageNumber: number, e: React.MouseEvent): Promise<void> => {
+      if (!noteModeRef.current) return
+      // Don't drop a pin when clicking on an existing annotation control.
+      const target = e.target as HTMLElement
+      if (target.closest('.annotation-highlight, .annotation-pin, .annotation-popover')) {
+        return
+      }
+      const el = pageRefsLocal.current.get(pageNumber)
+      if (!el) return
+      e.preventDefault()
+      const { x, y } = pointToPageCoord(e.clientX, e.clientY, el, scaleRef.current)
+      setNoteMode(false)
+      const ann = await createNote({ pageNumber, x, y })
+      if (ann) {
+        justCreatedIdRef.current = ann.id
+        setOpenAnnotationId(ann.id)
+      }
+    },
+    [createNote, setNoteMode]
+  )
 
   const customTextRenderer = useMemo(
     () => buildTextRenderer(search.highlightRegex),
@@ -301,6 +395,74 @@ export default function PDFViewer({
     }
   }, [onZoomTo])
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const target = e.target as HTMLElement | null
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return
+      }
+      if (e.key === 'Escape' && noteModeRef.current) {
+        e.preventDefault()
+        setNoteMode(false)
+        return
+      }
+      const sel = window.getSelection()
+      const hasSelection = !!sel && !sel.isCollapsed && sel.toString().trim().length > 0
+      if (e.key >= '1' && e.key <= '5' && hasSelection) {
+        const idx = parseInt(e.key, 10) - 1
+        const color = HIGHLIGHT_COLORS[idx]
+        if (color) {
+          e.preventDefault()
+          triggerHighlight(color)
+        }
+        return
+      }
+      if ((e.key === 'h' || e.key === 'H') && hasSelection) {
+        e.preventDefault()
+        triggerHighlight(lastColorRef.current)
+        return
+      }
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault()
+        if (hasSelection) {
+          void triggerHighlight(lastColorRef.current, true)
+        } else {
+          setNoteMode(!noteModeRef.current)
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [triggerHighlight, setNoteMode])
+
+  const renderPageOverlay = useCallback(
+    (pageNumber: number, frontScale: number): React.ReactNode => {
+      const list = annotationsByPage.get(pageNumber)
+      if (!list || list.length === 0) return null
+      return (
+        <AnnotationLayer
+          annotations={list}
+          scale={frontScale}
+          openId={openAnnotationId}
+          openIsNew={justCreatedIdRef.current === openAnnotationId && openAnnotationId !== null}
+          onOpenChange={(id) => {
+            justCreatedIdRef.current = null
+            setOpenAnnotationId(id)
+          }}
+          onUpdate={updateAnnotation}
+          onDelete={deleteAnnotation}
+        />
+      )
+    },
+    [annotationsByPage, openAnnotationId, updateAnnotation, deleteAnnotation]
+  )
+
   const onDocumentLoadSuccess = useCallback(
     async (pdf: {
       numPages: number
@@ -325,7 +487,7 @@ export default function PDFViewer({
   )
 
   return (
-    <div className="pdf-viewer">
+    <div className={`pdf-viewer${noteMode ? ' pdf-viewer--note-mode' : ''}`}>
       <SearchBar search={search} indexReady={searchIndexReady} />
       <div className="pdf-document" ref={containerRef}>
         <div className="pdf-pages-inner">
@@ -341,10 +503,12 @@ export default function PDFViewer({
             {renderWindow(
               layout.windowA,
               scale,
-              setPageRef,
+              setPageRefCombined,
               getPlaceholderHeight,
               onPageRenderSuccess,
-              customTextRenderer
+              customTextRenderer,
+              renderPageOverlay,
+              handlePageMouseDown
             )}
             {layout.middleSpacer > 0 && (
               <div className="pdf-spacer" style={{ height: layout.middleSpacer }} />
@@ -353,10 +517,12 @@ export default function PDFViewer({
               renderWindow(
                 layout.windowB,
                 scale,
-                setPageRef,
+                setPageRefCombined,
                 getPlaceholderHeight,
                 onPageRenderSuccess,
-                customTextRenderer
+                customTextRenderer,
+                renderPageOverlay,
+                handlePageMouseDown
               )}
             {layout.bottomSpacer > 0 && (
               <div className="pdf-spacer" style={{ height: layout.bottomSpacer }} />
@@ -367,3 +533,6 @@ export default function PDFViewer({
     </div>
   )
 }
+
+const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(PDFViewerInner)
+export default PDFViewer

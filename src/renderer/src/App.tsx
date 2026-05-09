@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
-import PDFViewer from './components/PDFViewer'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import PDFViewer, { type PDFViewerHandle } from './components/PDFViewer'
 import Toolbar from './components/Toolbar'
 import OutlineSidebar from './components/OutlineSidebar'
 import { useZoom } from './components/useZoom'
 import { useWindowedPages } from './components/useWindowedPages'
 import { useSearch } from './components/useSearch'
+import { useAnnotations, type HighlightColor } from './components/useAnnotations'
 import type { OutlineNode } from './components/loadToc'
 import type { SearchIndex } from './components/buildSearchIndex'
 import './assets/main.css'
@@ -12,6 +13,7 @@ import './assets/main.css'
 interface PdfFile {
   path: string
   data: Buffer
+  documentId: string
 }
 
 export default function App(): React.JSX.Element {
@@ -19,6 +21,8 @@ export default function App(): React.JSX.Element {
   const [numPages, setNumPages] = useState<number>(0)
   const [outline, setOutline] = useState<OutlineNode[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [noteMode, setNoteMode] = useState(false)
+  const pdfRef = useRef<PDFViewerHandle>(null)
   const toggleSidebar = useCallback(() => setSidebarOpen((v) => !v), [])
 
   useEffect(() => {
@@ -36,16 +40,22 @@ export default function App(): React.JSX.Element {
   const windowed = useWindowedPages(numPages, scale)
   const [searchIndex, setSearchIndex] = useState<SearchIndex | null>(null)
   const search = useSearch(searchIndex, windowed.scrollToPage)
+  const annotations = useAnnotations(pdf?.documentId ?? null)
 
   const handleOpen = async (): Promise<void> => {
     const path = await window.api.openPdf()
     if (!path) return
-    const { data } = await window.api.readPdf(path)
+    const { data, document } = await window.api.readPdf(path)
     setOutline([])
     setSearchIndex(null)
     setSidebarOpen(true)
-    setPdf({ path, data })
+    setNoteMode(false)
+    setPdf({ path, data, documentId: document.id })
   }
+
+  const handleHighlightSelection = useCallback((color: HighlightColor) => {
+    pdfRef.current?.triggerHighlight(color)
+  }, [])
 
   return (
     <div className="app-layout">
@@ -64,6 +74,10 @@ export default function App(): React.JSX.Element {
         showSidebarToggle={outline.length > 0}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={toggleSidebar}
+        showAnnotationControls={pdf !== null}
+        onHighlightSelection={handleHighlightSelection}
+        noteMode={noteMode}
+        onToggleNoteMode={() => setNoteMode((v) => !v)}
       />
       <div className="main-area">
         {pdf ? (
@@ -76,6 +90,7 @@ export default function App(): React.JSX.Element {
               />
             )}
             <PDFViewer
+              ref={pdfRef}
               data={pdf.data}
               scale={scale}
               setNumPages={setNumPages}
@@ -90,6 +105,9 @@ export default function App(): React.JSX.Element {
               onZoomTo={zoomTo}
               search={search}
               searchIndexReady={searchIndex !== null}
+              annotations={annotations}
+              noteMode={noteMode}
+              setNoteMode={setNoteMode}
             />
           </>
         ) : (

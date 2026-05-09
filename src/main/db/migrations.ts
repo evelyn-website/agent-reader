@@ -15,6 +15,25 @@ const migrations: Migration[] = [
         open_count      INTEGER NOT NULL DEFAULT 0
       );
     `)
+  },
+  (db) => {
+    db.exec(`
+      CREATE TABLE annotations (
+        id           TEXT PRIMARY KEY,
+        document_id  TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        page_number  INTEGER NOT NULL,
+        kind         TEXT NOT NULL CHECK (kind IN ('highlight', 'note')),
+        color        TEXT,
+        rects_json   TEXT,
+        anchor_x     REAL,
+        anchor_y     REAL,
+        text_excerpt TEXT,
+        comment      TEXT,
+        created_at   INTEGER NOT NULL,
+        updated_at   INTEGER NOT NULL
+      );
+      CREATE INDEX idx_annotations_doc_page ON annotations(document_id, page_number);
+    `)
   }
 ]
 

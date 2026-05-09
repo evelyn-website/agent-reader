@@ -1,12 +1,26 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { DocumentRow } from '../main/db'
+import type {
+  AnnotationRow,
+  CreateAnnotationInput,
+  DocumentRow,
+  UpdateAnnotationInput
+} from '../main/db'
 
 export type ReadPdfResult = { data: Buffer; document: DocumentRow }
 
 const api = {
   openPdf: (): Promise<string | null> => ipcRenderer.invoke('pdf:open'),
-  readPdf: (filePath: string): Promise<ReadPdfResult> => ipcRenderer.invoke('pdf:read', filePath)
+  readPdf: (filePath: string): Promise<ReadPdfResult> => ipcRenderer.invoke('pdf:read', filePath),
+  annotations: {
+    list: (documentId: string): Promise<AnnotationRow[]> =>
+      ipcRenderer.invoke('annotations:list', documentId),
+    create: (input: CreateAnnotationInput): Promise<AnnotationRow> =>
+      ipcRenderer.invoke('annotations:create', input),
+    update: (id: string, patch: UpdateAnnotationInput): Promise<AnnotationRow | null> =>
+      ipcRenderer.invoke('annotations:update', id, patch),
+    delete: (id: string): Promise<null> => ipcRenderer.invoke('annotations:delete', id)
+  }
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

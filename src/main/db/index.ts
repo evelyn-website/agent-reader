@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { join, basename } from 'path'
-import { createHash } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import Database from 'better-sqlite3'
 import { runMigrations } from './migrations'
 
@@ -73,4 +73,112 @@ export function listRecent(limit = 50): DocumentRow[] {
       `SELECT * FROM documents ORDER BY last_opened_at DESC LIMIT ?`
     )
     .all(limit)
+}
+
+export type AnnotationKind = 'highlight' | 'note'
+
+export interface AnnotationRow {
+  id: string
+  document_id: string
+  page_number: number
+  kind: AnnotationKind
+  color: string | null
+  rects_json: string | null
+  anchor_x: number | null
+  anchor_y: number | null
+  text_excerpt: string | null
+  comment: string | null
+  created_at: number
+  updated_at: number
+}
+
+export interface CreateAnnotationInput {
+  document_id: string
+  page_number: number
+  kind: AnnotationKind
+  color?: string | null
+  rects_json?: string | null
+  anchor_x?: number | null
+  anchor_y?: number | null
+  text_excerpt?: string | null
+  comment?: string | null
+}
+
+export interface UpdateAnnotationInput {
+  color?: string | null
+  comment?: string | null
+  rects_json?: string | null
+  anchor_x?: number | null
+  anchor_y?: number | null
+}
+
+export function listAnnotations(documentId: string): AnnotationRow[] {
+  return getDb()
+    .prepare<[string], AnnotationRow>(
+      `SELECT * FROM annotations WHERE document_id = ? ORDER BY page_number, created_at`
+    )
+    .all(documentId)
+}
+
+export function createAnnotation(input: CreateAnnotationInput): AnnotationRow {
+  const d = getDb()
+  const id = randomUUID()
+  const now = Date.now()
+  d.prepare(
+    `INSERT INTO annotations
+      (id, document_id, page_number, kind, color, rects_json,
+       anchor_x, anchor_y, text_excerpt, comment, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    input.document_id,
+    input.page_number,
+    input.kind,
+    input.color ?? null,
+    input.rects_json ?? null,
+    input.anchor_x ?? null,
+    input.anchor_y ?? null,
+    input.text_excerpt ?? null,
+    input.comment ?? null,
+    now,
+    now
+  )
+  return d
+    .prepare<[string], AnnotationRow>(`SELECT * FROM annotations WHERE id = ?`)
+    .get(id)!
+}
+
+export function updateAnnotation(id: string, patch: UpdateAnnotationInput): AnnotationRow | null {
+  const d = getDb()
+  const existing = d
+    .prepare<[string], AnnotationRow>(`SELECT * FROM annotations WHERE id = ?`)
+    .get(id)
+  if (!existing) return null
+  const merged = {
+    color: patch.color !== undefined ? patch.color : existing.color,
+    rects_json: patch.rects_json !== undefined ? patch.rects_json : existing.rects_json,
+    anchor_x: patch.anchor_x !== undefined ? patch.anchor_x : existing.anchor_x,
+    anchor_y: patch.anchor_y !== undefined ? patch.anchor_y : existing.anchor_y,
+    comment: patch.comment !== undefined ? patch.comment : existing.comment
+  }
+  d.prepare(
+    `UPDATE annotations
+       SET color = ?, rects_json = ?, anchor_x = ?, anchor_y = ?, comment = ?, updated_at = ?
+     WHERE id = ?`
+  ).run(
+    merged.color,
+    merged.rects_json,
+    merged.anchor_x,
+    merged.anchor_y,
+    merged.comment,
+    Date.now(),
+    id
+  )
+  return d
+    .prepare<[string], AnnotationRow>(`SELECT * FROM annotations WHERE id = ?`)
+    .get(id)!
+}
+
+export function deleteAnnotation(id: string): void {
+  getDb().prepare(`DELETE FROM annotations WHERE id = ?`).run(id)
 }

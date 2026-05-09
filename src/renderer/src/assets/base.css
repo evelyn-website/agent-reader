@@ -29,6 +29,26 @@
   --color-background-mute: var(--ev-c-black-mute);
 
   --color-text: var(--ev-c-text-1);
+
+  /* Pro-tool palette (Cursor / Linear / Raycast style) */
+  --surface-0: #161618;
+  --surface-1: #1c1c1f;
+  --surface-2: #232327;
+  --surface-hover: #2a2a2f;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.10);
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-tertiary: rgba(255, 255, 255, 0.38);
+  --accent: #3b82f6;
+  --accent-hover: #4f8df7;
+  --accent-soft: rgba(59, 130, 246, 0.15);
+  --danger: #f87171;
+  --shadow-popover:
+    0 0 0 1px var(--border-subtle),
+    0 4px 8px rgba(0, 0, 0, 0.25),
+    0 16px 40px -8px rgba(0, 0, 0, 0.5);
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 }
 
 *,
