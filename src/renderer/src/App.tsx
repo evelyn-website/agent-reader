@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import PDFViewer, { type PDFViewerHandle } from './components/PDFViewer'
 import Toolbar from './components/Toolbar'
-import OutlineSidebar from './components/OutlineSidebar'
+import SidePanel, { type SidePanelTab } from './components/SidePanel'
+import OutlineTabContent from './components/OutlineTabContent'
+import FilesTabContent from './components/FilesTabContent'
+import ChatTabContent from './components/ChatTabContent'
+import MarksTabContent from './components/MarksTabContent'
 import { useZoom } from './components/useZoom'
 import { useWindowedPages } from './components/useWindowedPages'
 import { useSearch } from './components/useSearch'
@@ -16,26 +20,79 @@ interface PdfFile {
   documentId: string
 }
 
+type LeftTabId = 'files' | 'toc'
+type RightTabId = 'chat' | 'marks'
+
 export default function App(): React.JSX.Element {
   const [pdf, setPdf] = useState<PdfFile | null>(null)
   const [numPages, setNumPages] = useState<number>(0)
   const [outline, setOutline] = useState<OutlineNode[]>([])
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [leftOpen, setLeftOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
+  const [leftTab, setLeftTab] = useState<LeftTabId>('toc')
+  const [rightTab, setRightTab] = useState<RightTabId>('chat')
+  const focusModeSnapshot = useRef<{ left: boolean; right: boolean } | null>(null)
   const [noteMode, setNoteMode] = useState(false)
   const pdfRef = useRef<PDFViewerHandle>(null)
-  const toggleSidebar = useCallback(() => setSidebarOpen((v) => !v), [])
+
+  const toggleLeft = useCallback(() => setLeftOpen((v) => !v), [])
+  const toggleRight = useCallback(() => setRightOpen((v) => !v), [])
+
+  const focusLeftTab = useCallback((id: LeftTabId) => {
+    setLeftTab(id)
+    setLeftOpen(true)
+  }, [])
+  const focusRightTab = useCallback((id: RightTabId) => {
+    setRightTab(id)
+    setRightOpen(true)
+  }, [])
+
+  const toggleFocusMode = useCallback(() => {
+    if (focusModeSnapshot.current) {
+      const snap = focusModeSnapshot.current
+      focusModeSnapshot.current = null
+      setLeftOpen(snap.left)
+      setRightOpen(snap.right)
+    } else {
+      focusModeSnapshot.current = { left: leftOpen, right: rightOpen }
+      setLeftOpen(false)
+      setRightOpen(false)
+    }
+  }, [leftOpen, rightOpen])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.key === '\\') {
-        if (outline.length === 0) return
+      if (!e.metaKey || e.altKey || e.ctrlKey) return
+      const shift = e.shiftKey
+      const k = e.key
+
+      if (k === '\\') {
         e.preventDefault()
-        toggleSidebar()
+        if (shift) toggleRight()
+        else toggleLeft()
+        return
+      }
+      if (!shift && k === 'b') {
+        e.preventDefault()
+        toggleFocusMode()
+        return
+      }
+      if (!shift && (k === '1' || k === '2')) {
+        e.preventDefault()
+        focusLeftTab(k === '1' ? 'files' : 'toc')
+        return
+      }
+      if (shift && (k === '1' || k === '!' || k === '2' || k === '@')) {
+        e.preventDefault()
+        const isOne = k === '1' || k === '!'
+        focusRightTab(isOne ? 'chat' : 'marks')
+        return
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [outline.length, toggleSidebar])
+  }, [toggleLeft, toggleRight, toggleFocusMode, focusLeftTab, focusRightTab])
+
   const { scale, zoomIn, zoomOut, zoomReset, zoomTo, atMin, atMax } = useZoom()
   const windowed = useWindowedPages(numPages, scale)
   const [searchIndex, setSearchIndex] = useState<SearchIndex | null>(null)
@@ -48,7 +105,6 @@ export default function App(): React.JSX.Element {
     const { data, document } = await window.api.readPdf(path)
     setOutline([])
     setSearchIndex(null)
-    setSidebarOpen(true)
     setNoteMode(false)
     setPdf({ path, data, documentId: document.id })
   }
@@ -56,6 +112,25 @@ export default function App(): React.JSX.Element {
   const handleHighlightSelection = useCallback((color: HighlightColor) => {
     pdfRef.current?.triggerHighlight(color)
   }, [])
+
+  const leftTabs: SidePanelTab[] = [
+    { id: 'files', label: 'Files', content: <FilesTabContent /> },
+    {
+      id: 'toc',
+      label: 'Outline',
+      content: (
+        <OutlineTabContent
+          outline={outline}
+          currentPage={windowed.currentPage}
+          onJumpToPage={windowed.scrollToPage}
+        />
+      )
+    }
+  ]
+  const rightTabs: SidePanelTab[] = [
+    { id: 'chat', label: 'Chat', content: <ChatTabContent /> },
+    { id: 'marks', label: 'Marks', content: <MarksTabContent /> }
+  ]
 
   return (
     <div className="app-layout">
@@ -71,24 +146,25 @@ export default function App(): React.JSX.Element {
         currentPage={windowed.currentPage}
         numPages={numPages}
         onJumpToPage={windowed.scrollToPage}
-        showSidebarToggle={outline.length > 0}
-        sidebarOpen={sidebarOpen}
-        onToggleSidebar={toggleSidebar}
+        showSidebarToggle
+        sidebarOpen={leftOpen}
+        onToggleSidebar={toggleLeft}
         showAnnotationControls={pdf !== null}
         onHighlightSelection={handleHighlightSelection}
         noteMode={noteMode}
         onToggleNoteMode={() => setNoteMode((v) => !v)}
       />
       <div className="main-area">
-        {pdf ? (
-          <>
-            {outline.length > 0 && sidebarOpen && (
-              <OutlineSidebar
-                outline={outline}
-                currentPage={windowed.currentPage}
-                onJumpToPage={windowed.scrollToPage}
-              />
-            )}
+        {leftOpen && (
+          <SidePanel
+            side="left"
+            tabs={leftTabs}
+            activeTabId={leftTab}
+            onTabChange={(id) => setLeftTab(id as LeftTabId)}
+          />
+        )}
+        <div className="center-pane">
+          {pdf ? (
             <PDFViewer
               ref={pdfRef}
               data={pdf.data}
@@ -109,11 +185,19 @@ export default function App(): React.JSX.Element {
               noteMode={noteMode}
               setNoteMode={setNoteMode}
             />
-          </>
-        ) : (
-          <div className="empty-state">
-            <p>Open a PDF to get started</p>
-          </div>
+          ) : (
+            <div className="empty-state">
+              <p>Open a PDF to get started</p>
+            </div>
+          )}
+        </div>
+        {rightOpen && (
+          <SidePanel
+            side="right"
+            tabs={rightTabs}
+            activeTabId={rightTab}
+            onTabChange={(id) => setRightTab(id as RightTabId)}
+          />
         )}
       </div>
     </div>

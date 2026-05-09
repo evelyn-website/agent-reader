@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef } from 'react'
 import OutlineItem from './OutlineItem'
 import type { OutlineNode } from './loadToc'
 
-interface OutlineSidebarProps {
+interface OutlineTabContentProps {
   outline: OutlineNode[]
   currentPage: number
   onJumpToPage: (n: number) => void
@@ -21,39 +21,13 @@ function flatten(nodes: OutlineNode[], parentPath: string, out: FlatEntry[]): vo
   })
 }
 
-export default function OutlineSidebar({
+export default function OutlineTabContent({
   outline,
   currentPage,
   onJumpToPage
-}: OutlineSidebarProps): React.JSX.Element {
+}: OutlineTabContentProps): React.JSX.Element {
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(outline.map((_, i) => String(i)))
-  )
-  const [width, setWidth] = useState(260)
-
-  const onResizerMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault()
-      const startX = e.clientX
-      const startWidth = width
-      const prevCursor = document.body.style.cursor
-      const prevSelect = document.body.style.userSelect
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-      const onMove = (ev: MouseEvent): void => {
-        const next = startWidth + (ev.clientX - startX)
-        setWidth(Math.max(180, Math.min(600, next)))
-      }
-      const onUp = (): void => {
-        window.removeEventListener('mousemove', onMove)
-        window.removeEventListener('mouseup', onUp)
-        document.body.style.cursor = prevCursor
-        document.body.style.userSelect = prevSelect
-      }
-      window.addEventListener('mousemove', onMove)
-      window.addEventListener('mouseup', onUp)
-    },
-    [width]
   )
   const [stickyClick, setStickyClick] = useState<{
     path: string
@@ -103,25 +77,24 @@ export default function OutlineSidebar({
     })
   }, [])
 
+  if (outline.length === 0) {
+    return <div className="tab-empty-state">No outline available</div>
+  }
+
   return (
-    <aside className="outline-sidebar" style={{ width }}>
-      <div className="outline-scroll">
-        <ul className="outline-root">
-          {outline.map((node, i) => (
-            <OutlineItem
-              key={i}
-              node={node}
-              path={String(i)}
-              depth={0}
-              expanded={expanded}
-              onToggle={onToggle}
-              activePath={activePath}
-              onJump={handleJump}
-            />
-          ))}
-        </ul>
-      </div>
-      <div className="outline-resizer" onMouseDown={onResizerMouseDown} />
-    </aside>
+    <ul className="outline-root">
+      {outline.map((node, i) => (
+        <OutlineItem
+          key={i}
+          node={node}
+          path={String(i)}
+          depth={0}
+          expanded={expanded}
+          onToggle={onToggle}
+          activePath={activePath}
+          onJump={handleJump}
+        />
+      ))}
+    </ul>
   )
 }
