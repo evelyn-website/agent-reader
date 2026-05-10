@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import { join, basename } from 'path'
 import { createHash, randomUUID } from 'crypto'
 import Database from 'better-sqlite3'
@@ -16,12 +15,25 @@ export interface DocumentRow {
 
 let db: Database.Database | null = null
 
-export function initDb(): void {
-  const dbPath = join(app.getPath('userData'), 'agent-reader.db')
-  db = new Database(dbPath)
-  db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
-  runMigrations(db)
+export function createDb(dbPath: string): Database.Database {
+  const instance = new Database(dbPath)
+  if (dbPath !== ':memory:') instance.pragma('journal_mode = WAL')
+  instance.pragma('foreign_keys = ON')
+  runMigrations(instance)
+  return instance
+}
+
+export function initDb(dbPath?: string): void {
+  let path = dbPath
+  if (!path) {
+    const { app } = require('electron') as typeof import('electron')
+    path = join(app.getPath('userData'), 'agent-reader.db')
+  }
+  db = createDb(path)
+}
+
+export function setDbForTesting(instance: Database.Database | null): void {
+  db = instance
 }
 
 function getDb(): Database.Database {

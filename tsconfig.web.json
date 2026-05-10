@@ -4,12 +4,14 @@
     "src/renderer/src/env.d.ts",
     "src/renderer/src/**/*",
     "src/renderer/src/**/*.tsx",
+    "src/renderer/test-setup.ts",
     "src/preload/*.d.ts"
   ],
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",
     "baseUrl": ".",
+    "types": ["vitest/globals", "@testing-library/jest-dom"],
     "paths": {
       "@renderer/*": [
         "src/renderer/src/*"
