@@ -1196,6 +1196,12 @@ body {
   border-color: var(--border-subtle);
 }
 
+.marks-toolbar__chip--icon {
+  width: 22px;
+  padding: 0;
+  justify-content: center;
+}
+
 .marks-toolbar__divider {
   display: inline-block;
   width: 1px;
@@ -1282,6 +1288,16 @@ body {
 .marks-row__time {
   flex: 0 0 auto;
   margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.marks-row__page {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  margin-right: 6px;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-tertiary);

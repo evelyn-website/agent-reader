@@ -5,8 +5,10 @@ import {
   type HighlightColor,
   type UseAnnotationsResult
 } from './useAnnotations'
+import { AllIcon, ClockIcon, HighlightIcon, NoteIcon, PageIcon, TrashIcon } from './icons'
 
 type KindFilter = 'all' | 'highlight' | 'note'
+type SortMode = 'page' | 'recent'
 
 interface Props {
   annotations: UseAnnotationsResult
@@ -42,6 +44,7 @@ export default function MarksTabContent({
 }: Props): React.JSX.Element {
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [colorFilter, setColorFilter] = useState<HighlightColor | null>(null)
+  const [sort, setSort] = useState<SortMode>('page')
 
   const showColorRow = kindFilter !== 'note'
 
@@ -57,6 +60,7 @@ export default function MarksTabContent({
   }, [annotations.all, kindFilter, colorFilter, showColorRow])
 
   const grouped = useMemo(() => {
+    if (sort !== 'page') return []
     const m = new Map<number, Annotation[]>()
     for (const a of filtered) {
       const arr = m.get(a.pageNumber)
@@ -65,7 +69,14 @@ export default function MarksTabContent({
     }
     for (const arr of m.values()) arr.sort((a, b) => a.createdAt - b.createdAt)
     return Array.from(m.entries()).sort((a, b) => a[0] - b[0])
-  }, [filtered])
+  }, [filtered, sort])
+
+  const recent = useMemo(() => {
+    if (sort !== 'recent') return []
+    return [...filtered].sort((a, b) => b.createdAt - a.createdAt)
+  }, [filtered, sort])
+
+  const isEmpty = sort === 'page' ? grouped.length === 0 : recent.length === 0
 
   if (!hasDocument) {
     return <div className="tab-empty-state">Open a PDF to see marks</div>
@@ -75,22 +86,31 @@ export default function MarksTabContent({
     <div className="marks-tab">
       <div className="marks-toolbar" role="toolbar" aria-label="Filter marks">
         <button
-          className={`marks-toolbar__chip${kindFilter === 'all' ? ' marks-toolbar__chip--active' : ''}`}
+          className={`marks-toolbar__chip marks-toolbar__chip--icon${kindFilter === 'all' ? ' marks-toolbar__chip--active' : ''}`}
           onClick={() => setKindFilter('all')}
+          title="All marks"
+          aria-label="All marks"
+          aria-pressed={kindFilter === 'all'}
         >
-          All
+          <AllIcon />
         </button>
         <button
-          className={`marks-toolbar__chip${kindFilter === 'highlight' ? ' marks-toolbar__chip--active' : ''}`}
+          className={`marks-toolbar__chip marks-toolbar__chip--icon${kindFilter === 'highlight' ? ' marks-toolbar__chip--active' : ''}`}
           onClick={() => setKindFilter('highlight')}
+          title="Highlights"
+          aria-label="Highlights"
+          aria-pressed={kindFilter === 'highlight'}
         >
-          Highlights
+          <HighlightIcon />
         </button>
         <button
-          className={`marks-toolbar__chip${kindFilter === 'note' ? ' marks-toolbar__chip--active' : ''}`}
+          className={`marks-toolbar__chip marks-toolbar__chip--icon${kindFilter === 'note' ? ' marks-toolbar__chip--active' : ''}`}
           onClick={() => setKindFilter('note')}
+          title="Notes"
+          aria-label="Notes"
+          aria-pressed={kindFilter === 'note'}
         >
-          Notes
+          <NoteIcon />
         </button>
         {showColorRow && (
           <>
@@ -109,11 +129,30 @@ export default function MarksTabContent({
             ))}
           </>
         )}
+        <span className="marks-toolbar__divider" aria-hidden />
+        <button
+          className={`marks-toolbar__chip marks-toolbar__chip--icon${sort === 'page' ? ' marks-toolbar__chip--active' : ''}`}
+          onClick={() => setSort('page')}
+          title="Group by page"
+          aria-label="Sort by page"
+          aria-pressed={sort === 'page'}
+        >
+          <PageIcon />
+        </button>
+        <button
+          className={`marks-toolbar__chip marks-toolbar__chip--icon${sort === 'recent' ? ' marks-toolbar__chip--active' : ''}`}
+          onClick={() => setSort('recent')}
+          title="Sort by most recent"
+          aria-label="Sort by most recent"
+          aria-pressed={sort === 'recent'}
+        >
+          <ClockIcon />
+        </button>
       </div>
 
-      {grouped.length === 0 ? (
+      {isEmpty ? (
         <div className="tab-empty-state">{emptyMessage(kindFilter, colorFilter)}</div>
-      ) : (
+      ) : sort === 'page' ? (
         <div className="marks-list">
           {grouped.map(([page, items]) => (
             <div key={page} className="marks-page-group">
@@ -129,6 +168,18 @@ export default function MarksTabContent({
             </div>
           ))}
         </div>
+      ) : (
+        <div className="marks-list">
+          {recent.map((a) => (
+            <MarkRow
+              key={a.id}
+              annotation={a}
+              pageLabel={`p.${a.pageNumber}`}
+              onJump={() => onJumpToPage(a.pageNumber)}
+              onDelete={() => void annotations.deleteAnnotation(a.id)}
+            />
+          ))}
+        </div>
       )}
     </div>
   )
@@ -138,9 +189,10 @@ interface RowProps {
   annotation: Annotation
   onJump: () => void
   onDelete: () => void
+  pageLabel?: string
 }
 
-function MarkRow({ annotation, onJump, onDelete }: RowProps): React.JSX.Element {
+function MarkRow({ annotation, onJump, onDelete, pageLabel }: RowProps): React.JSX.Element {
   const isHighlight = annotation.kind === 'highlight'
   const hasComment = !!annotation.comment && annotation.comment.trim() !== ''
   const primary = isHighlight
@@ -171,7 +223,7 @@ function MarkRow({ annotation, onJump, onDelete }: RowProps): React.JSX.Element 
             }`}
           />
         ) : (
-          <NoteGlyph />
+          <NoteIcon />
         )}
       </div>
       <div className="marks-row__body">
@@ -184,6 +236,7 @@ function MarkRow({ annotation, onJump, onDelete }: RowProps): React.JSX.Element 
         </div>
         {secondary && <div className="marks-row__secondary">{secondary}</div>}
       </div>
+      {pageLabel && <span className="marks-row__page">{pageLabel}</span>}
       <span className="marks-row__time" title={new Date(annotation.updatedAt).toLocaleString()}>
         {formatRelativeTime(annotation.updatedAt)}
       </span>
@@ -196,35 +249,9 @@ function MarkRow({ annotation, onJump, onDelete }: RowProps): React.JSX.Element 
         aria-label="Delete mark"
         title="Delete"
       >
-        <TrashGlyph />
+        <TrashIcon />
       </button>
     </div>
   )
 }
 
-function NoteGlyph(): React.JSX.Element {
-  return (
-    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path
-        d="M3 3.5A1.5 1.5 0 0 1 4.5 2h7A1.5 1.5 0 0 1 13 3.5V10l-3 3H4.5A1.5 1.5 0 0 1 3 11.5v-8Z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function TrashGlyph(): React.JSX.Element {
-  return (
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path
-        d="M3 4h10M6.5 4V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1M5 4l.7 8.1a1 1 0 0 0 1 .9h2.6a1 1 0 0 0 1-.9L11 4"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}

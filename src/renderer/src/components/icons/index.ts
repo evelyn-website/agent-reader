@@ -1,0 +1,6 @@
+export { default as AllIcon } from './AllIcon'
+export { default as ClockIcon } from './ClockIcon'
+export { default as HighlightIcon } from './HighlightIcon'
+export { default as NoteIcon } from './NoteIcon'
+export { default as PageIcon } from './PageIcon'
+export { default as TrashIcon } from './TrashIcon'
