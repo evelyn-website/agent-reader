@@ -205,7 +205,10 @@ body {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font: 11px/1 'Inter', system-ui, sans-serif;
+  font:
+    11px/1 'Inter',
+    system-ui,
+    sans-serif;
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -857,7 +860,10 @@ body {
 .annotation-popover__textarea {
   resize: vertical;
   min-height: 60px;
-  font: 13px/1.5 Inter, system-ui, sans-serif;
+  font:
+    13px/1.5 Inter,
+    system-ui,
+    sans-serif;
   background: rgba(255, 255, 255, 0.03);
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
@@ -876,7 +882,10 @@ body {
 }
 
 .annotation-popover__body {
-  font: 13px/1.5 Inter, system-ui, sans-serif;
+  font:
+    13px/1.5 Inter,
+    system-ui,
+    sans-serif;
   color: var(--text-primary);
   padding: 8px 10px;
   border-radius: 6px;
@@ -1136,4 +1145,195 @@ body {
 .note-toggle--active:hover {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* ── Marks tab ── */
+
+.marks-tab {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.marks-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  margin: 10px 10px 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  align-self: flex-start;
+}
+
+.marks-toolbar__chip {
+  height: 22px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background-color 80ms ease-out,
+    color 80ms ease-out,
+    border-color 80ms ease-out;
+}
+
+.marks-toolbar__chip:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.marks-toolbar__chip--active {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+
+.marks-toolbar__divider {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: var(--border-subtle);
+  margin: 0 4px;
+}
+
+.marks-toolbar__color {
+  margin: 0 3px;
+}
+
+.marks-list {
+  padding: 2px 6px 12px;
+}
+
+.marks-page-group {
+  margin-bottom: 6px;
+}
+
+.marks-page-header {
+  padding: 10px 8px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.marks-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 6px 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 80ms ease-out;
+}
+
+.marks-row:hover,
+.marks-row:focus-visible {
+  background: var(--surface-hover);
+}
+
+.marks-row__icon {
+  flex: 0 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  color: var(--text-secondary);
+}
+
+.marks-row__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.marks-row__primary {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.marks-row__primary--placeholder {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.marks-row__secondary {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.marks-row__time {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.marks-row__delete {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 80ms ease-out,
+    color 80ms ease-out,
+    background-color 80ms ease-out;
+}
+
+.marks-row:hover .marks-row__delete,
+.marks-row:focus-within .marks-row__delete {
+  opacity: 1;
+}
+
+.marks-row__delete:hover {
+  background: var(--surface-1);
+  color: var(--danger);
+}
+
+.marks-swatch-dot {
+  position: relative;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.marks-swatch-dot--has-comment::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1.5px var(--surface-1);
 }

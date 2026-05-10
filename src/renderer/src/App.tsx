@@ -129,7 +129,17 @@ export default function App(): React.JSX.Element {
   ]
   const rightTabs: SidePanelTab[] = [
     { id: 'chat', label: 'Chat', content: <ChatTabContent /> },
-    { id: 'marks', label: 'Marks', content: <MarksTabContent /> }
+    {
+      id: 'marks',
+      label: 'Marks',
+      content: (
+        <MarksTabContent
+          annotations={annotations}
+          onJumpToPage={windowed.scrollToPage}
+          hasDocument={pdf !== null}
+        />
+      )
+    }
   ]
 
   return (
