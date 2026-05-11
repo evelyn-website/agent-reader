@@ -23,6 +23,17 @@ interface PdfFile {
 type LeftTabId = 'files' | 'toc'
 type RightTabId = 'chat' | 'marks'
 
+// US Letter at scale=1 is 612px; add page padding + scrollbar headroom so
+// a 100%-zoom PDF fits without horizontal scroll.
+const MIN_CONTENT_WIDTH = 660
+const PANEL_DEFAULT_WIDTH = 280
+
+function readPanelWidth(side: 'left' | 'right'): number {
+  const stored = window.localStorage.getItem(`agent-reader.sidePanel.${side}.width`)
+  const n = stored ? Number(stored) : NaN
+  return Number.isFinite(n) ? n : PANEL_DEFAULT_WIDTH
+}
+
 export default function App(): React.JSX.Element {
   const [pdf, setPdf] = useState<PdfFile | null>(null)
   const [numPages, setNumPages] = useState<number>(0)
@@ -34,6 +45,10 @@ export default function App(): React.JSX.Element {
   const focusModeSnapshot = useRef<{ left: boolean; right: boolean } | null>(null)
   const [noteMode, setNoteMode] = useState(false)
   const pdfRef = useRef<PDFViewerHandle>(null)
+  const leftOpenRef = useRef(leftOpen)
+  const rightOpenRef = useRef(rightOpen)
+  leftOpenRef.current = leftOpen
+  rightOpenRef.current = rightOpen
 
   const toggleLeft = useCallback(() => setLeftOpen((v) => !v), [])
   const toggleRight = useCallback(() => setRightOpen((v) => !v), [])
@@ -92,6 +107,28 @@ export default function App(): React.JSX.Element {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [toggleLeft, toggleRight, toggleFocusMode, focusLeftTab, focusRightTab])
+
+  // Auto-collapse panels when the window is too narrow to fit a usable
+  // document area. Right collapses before left (left = orienting nav).
+  // Only fires on initial mount and window resize — never reacts to user
+  // toggles, so explicit opens are respected even on a narrow window.
+  useEffect(() => {
+    const check = (): void => {
+      const w = window.innerWidth
+      const leftW = leftOpenRef.current ? readPanelWidth('left') : 0
+      const rightW = rightOpenRef.current ? readPanelWidth('right') : 0
+      if (w - leftW - rightW >= MIN_CONTENT_WIDTH) return
+      if (rightOpenRef.current && w - leftW >= MIN_CONTENT_WIDTH) {
+        setRightOpen(false)
+        return
+      }
+      if (leftOpenRef.current) setLeftOpen(false)
+      if (rightOpenRef.current) setRightOpen(false)
+    }
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   const { scale, zoomIn, zoomOut, zoomReset, zoomTo, atMin, atMax } = useZoom()
   const windowed = useWindowedPages(numPages, scale)
