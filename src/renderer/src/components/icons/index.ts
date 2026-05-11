@@ -1,5 +1,7 @@
 export { default as AllIcon } from './AllIcon'
+export { default as ChevronRightIcon } from './ChevronRightIcon'
 export { default as ClockIcon } from './ClockIcon'
+export { default as FolderIcon } from './FolderIcon'
 export { default as HighlightIcon } from './HighlightIcon'
 export { default as NoteIcon } from './NoteIcon'
 export { default as PageIcon } from './PageIcon'

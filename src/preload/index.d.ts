@@ -3,8 +3,10 @@ import type {
   AnnotationRow,
   CreateAnnotationInput,
   DocumentRow,
+  ProjectRow,
   UpdateAnnotationInput
 } from '../main/db'
+import type { ProjectScan } from '../main/project'
 
 declare global {
   interface Window {
@@ -17,6 +19,11 @@ declare global {
         create: (input: CreateAnnotationInput) => Promise<AnnotationRow>
         update: (id: string, patch: UpdateAnnotationInput) => Promise<AnnotationRow | null>
         delete: (id: string) => Promise<null>
+      }
+      project: {
+        open: () => Promise<string | null>
+        scan: (path: string) => Promise<ProjectScan>
+        listRecent: () => Promise<ProjectRow[]>
       }
     }
   }

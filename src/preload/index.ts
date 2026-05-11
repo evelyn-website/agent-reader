@@ -4,8 +4,10 @@ import type {
   AnnotationRow,
   CreateAnnotationInput,
   DocumentRow,
+  ProjectRow,
   UpdateAnnotationInput
 } from '../main/db'
+import type { ProjectScan } from '../main/project'
 
 export type ReadPdfResult = { data: Buffer; document: DocumentRow }
 
@@ -20,6 +22,11 @@ const api = {
     update: (id: string, patch: UpdateAnnotationInput): Promise<AnnotationRow | null> =>
       ipcRenderer.invoke('annotations:update', id, patch),
     delete: (id: string): Promise<null> => ipcRenderer.invoke('annotations:delete', id)
+  },
+  project: {
+    open: (): Promise<string | null> => ipcRenderer.invoke('project:open'),
+    scan: (path: string): Promise<ProjectScan> => ipcRenderer.invoke('project:scan', path),
+    listRecent: (): Promise<ProjectRow[]> => ipcRenderer.invoke('project:listRecent')
   }
 }
 

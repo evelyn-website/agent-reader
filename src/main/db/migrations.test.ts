@@ -12,7 +12,7 @@ describe('runMigrations', () => {
 
   afterEach(() => db.close())
 
-  it('creates schema_version, documents, and annotations tables', () => {
+  it('creates schema_version, documents, annotations, and projects tables', () => {
     runMigrations(db)
     const tables = db
       .prepare(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
@@ -21,19 +21,36 @@ describe('runMigrations', () => {
     expect(names).toContain('schema_version')
     expect(names).toContain('documents')
     expect(names).toContain('annotations')
+    expect(names).toContain('projects')
   })
 
   it('sets schema_version to the total migration count', () => {
     runMigrations(db)
     const row = db.prepare(`SELECT version FROM schema_version`).get() as { version: number }
-    expect(row.version).toBe(2)
+    expect(row.version).toBe(4)
   })
 
   it('is idempotent — re-running leaves version unchanged', () => {
     runMigrations(db)
     runMigrations(db)
     const row = db.prepare(`SELECT version FROM schema_version`).get() as { version: number }
-    expect(row.version).toBe(2)
+    expect(row.version).toBe(4)
+  })
+
+  it('projects upsert bumps open_count on conflict', () => {
+    runMigrations(db)
+    const stmt = db.prepare(
+      `INSERT INTO projects (path, name, first_opened_at, last_opened_at, open_count)
+       VALUES (?, ?, ?, ?, 1)
+       ON CONFLICT(path) DO UPDATE SET open_count = projects.open_count + 1`
+    )
+    stmt.run('/tmp/p', 'p', 1, 1)
+    stmt.run('/tmp/p', 'p', 2, 2)
+    stmt.run('/tmp/p', 'p', 3, 3)
+    const row = db.prepare(`SELECT open_count FROM projects WHERE path = '/tmp/p'`).get() as {
+      open_count: number
+    }
+    expect(row.open_count).toBe(3)
   })
 
   it('enforces FK: inserting an annotation with unknown document_id throws', () => {

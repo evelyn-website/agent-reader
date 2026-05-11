@@ -194,3 +194,39 @@ export function updateAnnotation(id: string, patch: UpdateAnnotationInput): Anno
 export function deleteAnnotation(id: string): void {
   getDb().prepare(`DELETE FROM annotations WHERE id = ?`).run(id)
 }
+
+export interface ProjectRow {
+  path: string
+  name: string
+  first_opened_at: number
+  last_opened_at: number
+  open_count: number
+}
+
+export function recordProjectOpen(args: { path: string; name: string }): ProjectRow {
+  const d = getDb()
+  const now = Date.now()
+  d.prepare(
+    `INSERT INTO projects (path, name, first_opened_at, last_opened_at, open_count)
+     VALUES (?, ?, ?, ?, 1)
+     ON CONFLICT(path) DO UPDATE SET
+       name = excluded.name,
+       last_opened_at = excluded.last_opened_at,
+       open_count = projects.open_count + 1`
+  ).run(args.path, args.name, now, now)
+  return d
+    .prepare<[string], ProjectRow>(`SELECT * FROM projects WHERE path = ?`)
+    .get(args.path)!
+}
+
+export function listRecentProjects(limit = 10): ProjectRow[] {
+  return getDb()
+    .prepare<[number], ProjectRow>(
+      `SELECT * FROM projects ORDER BY last_opened_at DESC LIMIT ?`
+    )
+    .all(limit)
+}
+
+export function deleteProject(path: string): void {
+  getDb().prepare(`DELETE FROM projects WHERE path = ?`).run(path)
+}

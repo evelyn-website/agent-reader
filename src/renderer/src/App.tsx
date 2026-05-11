@@ -6,12 +6,15 @@ import OutlineTabContent from './components/OutlineTabContent'
 import FilesTabContent from './components/FilesTabContent'
 import ChatTabContent from './components/ChatTabContent'
 import MarksTabContent from './components/MarksTabContent'
+import EmptyLauncher from './components/EmptyLauncher'
 import { useZoom } from './components/useZoom'
 import { useWindowedPages } from './components/useWindowedPages'
 import { useSearch } from './components/useSearch'
 import { useAnnotations, type HighlightColor } from './components/useAnnotations'
 import type { OutlineNode } from './components/loadToc'
 import type { SearchIndex } from './components/buildSearchIndex'
+import type { ProjectRow } from '../../main/db'
+import type { ProjectScan } from '../../main/project'
 import './assets/main.css'
 
 interface PdfFile {
@@ -36,6 +39,8 @@ function readPanelWidth(side: 'left' | 'right'): number {
 
 export default function App(): React.JSX.Element {
   const [pdf, setPdf] = useState<PdfFile | null>(null)
+  const [project, setProject] = useState<ProjectScan | null>(null)
+  const [recentProjects, setRecentProjects] = useState<ProjectRow[]>([])
   const [numPages, setNumPages] = useState<number>(0)
   const [outline, setOutline] = useState<OutlineNode[]>([])
   const [leftOpen, setLeftOpen] = useState(true)
@@ -136,22 +141,60 @@ export default function App(): React.JSX.Element {
   const search = useSearch(searchIndex, windowed.scrollToPage)
   const annotations = useAnnotations(pdf?.documentId ?? null)
 
-  const handleOpen = async (): Promise<void> => {
-    const path = await window.api.openPdf()
-    if (!path) return
+  const loadPdfPath = useCallback(async (path: string): Promise<void> => {
     const { data, document } = await window.api.readPdf(path)
     setOutline([])
     setSearchIndex(null)
     setNoteMode(false)
     setPdf({ path, data, documentId: document.id })
-  }
+  }, [])
+
+  const handleOpen = useCallback(async (): Promise<void> => {
+    const path = await window.api.openPdf()
+    if (!path) return
+    await loadPdfPath(path)
+  }, [loadPdfPath])
+
+  const openProjectByPath = useCallback(async (path: string): Promise<void> => {
+    const scan = await window.api.project.scan(path)
+    setProject(scan)
+    setLeftTab('files')
+    setLeftOpen(true)
+  }, [])
+
+  const handleOpenProject = useCallback(async (): Promise<void> => {
+    const path = await window.api.project.open()
+    if (!path) return
+    await openProjectByPath(path)
+  }, [openProjectByPath])
+
+  useEffect(() => {
+    if (pdf || project) return
+    let cancelled = false
+    window.api.project.listRecent().then((rows) => {
+      if (!cancelled) setRecentProjects(rows)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [pdf, project])
 
   const handleHighlightSelection = useCallback((color: HighlightColor) => {
     pdfRef.current?.triggerHighlight(color)
   }, [])
 
   const leftTabs: SidePanelTab[] = [
-    { id: 'files', label: 'Files', content: <FilesTabContent /> },
+    {
+      id: 'files',
+      label: 'Files',
+      content: (
+        <FilesTabContent
+          project={project}
+          activePath={pdf?.path ?? null}
+          onOpenFile={loadPdfPath}
+        />
+      )
+    },
     {
       id: 'toc',
       label: 'Outline',
@@ -232,10 +275,17 @@ export default function App(): React.JSX.Element {
               noteMode={noteMode}
               setNoteMode={setNoteMode}
             />
-          ) : (
-            <div className="empty-state">
-              <p>Open a PDF to get started</p>
+          ) : project ? (
+            <div className="empty-state empty-state--project">
+              <p>Select a document from Files</p>
             </div>
+          ) : (
+            <EmptyLauncher
+              onOpenPdf={handleOpen}
+              onOpenProject={handleOpenProject}
+              recentProjects={recentProjects}
+              onOpenRecent={openProjectByPath}
+            />
           )}
         </div>
         {rightOpen && (

@@ -34,6 +34,27 @@ const migrations: Migration[] = [
       );
       CREATE INDEX idx_annotations_doc_page ON annotations(document_id, page_number);
     `)
+  },
+  (db) => {
+    db.exec(`
+      CREATE TABLE app_state (
+        key   TEXT PRIMARY KEY,
+        value TEXT
+      );
+    `)
+  },
+  (db) => {
+    db.exec(`
+      DROP TABLE IF EXISTS app_state;
+      CREATE TABLE projects (
+        path            TEXT PRIMARY KEY,
+        name            TEXT NOT NULL,
+        first_opened_at INTEGER NOT NULL,
+        last_opened_at  INTEGER NOT NULL,
+        open_count      INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX idx_projects_last_opened ON projects(last_opened_at DESC);
+    `)
   }
 ]
 
