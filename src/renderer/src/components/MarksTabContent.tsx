@@ -16,7 +16,7 @@ interface Props {
   hasDocument: boolean
 }
 
-function formatRelativeTime(ts: number): string {
+export function formatRelativeTime(ts: number): string {
   const diff = Date.now() - ts
   const m = Math.floor(diff / 60_000)
   if (m < 1) return 'now'
@@ -30,7 +30,7 @@ function formatRelativeTime(ts: number): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function emptyMessage(kind: KindFilter, color: HighlightColor | null): string {
+export function emptyMessage(kind: KindFilter, color: HighlightColor | null): string {
   if (color) return `No ${color} highlights`
   if (kind === 'highlight') return 'No highlights yet'
   if (kind === 'note') return 'No notes yet'

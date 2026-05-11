@@ -1,18 +1,9 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, globalShortcut } from 'electron'
+import { app, shell, BrowserWindow, globalShortcut } from 'electron'
 import { join } from 'path'
-import { readFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import {
-  initDb,
-  recordOpen,
-  listAnnotations,
-  createAnnotation,
-  updateAnnotation,
-  deleteAnnotation,
-  type CreateAnnotationInput,
-  type UpdateAnnotationInput
-} from './db'
+import { initDb } from './db'
+import { registerIpcHandlers } from './ipc'
 
 function createWindow(): void {
   // Create the browser window.
@@ -72,41 +63,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  ipcMain.on('ping', () => console.log('pong'))
-
-  ipcMain.handle('pdf:open', async () => {
-    const { canceled, filePaths } = await dialog.showOpenDialog({
-      filters: [{ name: 'PDF', extensions: ['pdf'] }],
-      properties: ['openFile']
-    })
-    return canceled ? null : filePaths[0]
-  })
-
-  ipcMain.handle('pdf:read', (_event, filePath: string) => {
-    const data = readFileSync(filePath)
-    const document = recordOpen({ path: filePath, data })
-    return { data, document }
-  })
-
-  ipcMain.handle('annotations:list', (_event, documentId: string) => {
-    return listAnnotations(documentId)
-  })
-
-  ipcMain.handle('annotations:create', (_event, input: CreateAnnotationInput) => {
-    return createAnnotation(input)
-  })
-
-  ipcMain.handle(
-    'annotations:update',
-    (_event, id: string, patch: UpdateAnnotationInput) => {
-      return updateAnnotation(id, patch)
-    }
-  )
-
-  ipcMain.handle('annotations:delete', (_event, id: string) => {
-    deleteAnnotation(id)
-    return null
-  })
+  registerIpcHandlers()
 
   createWindow()
 
