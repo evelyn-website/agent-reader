@@ -3,6 +3,7 @@ import type {
   AnnotationRow,
   CreateAnnotationInput,
   DocumentRow,
+  ProjectDashboard,
   ProjectRow,
   UpdateAnnotationInput
 } from '../main/db'
@@ -23,6 +24,7 @@ declare global {
       project: {
         open: () => Promise<string | null>
         scan: (path: string) => Promise<ProjectScan>
+        dashboard: (scan: ProjectScan) => Promise<ProjectDashboard>
         listRecent: () => Promise<ProjectRow[]>
       }
       searchIndex: {

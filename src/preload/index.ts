@@ -4,6 +4,7 @@ import type {
   AnnotationRow,
   CreateAnnotationInput,
   DocumentRow,
+  ProjectDashboard,
   ProjectRow,
   UpdateAnnotationInput
 } from '../main/db'
@@ -26,6 +27,8 @@ const api = {
   project: {
     open: (): Promise<string | null> => ipcRenderer.invoke('project:open'),
     scan: (path: string): Promise<ProjectScan> => ipcRenderer.invoke('project:scan', path),
+    dashboard: (scan: ProjectScan): Promise<ProjectDashboard> =>
+      ipcRenderer.invoke('project:dashboard', scan),
     listRecent: (): Promise<ProjectRow[]> => ipcRenderer.invoke('project:listRecent')
   },
   searchIndex: {

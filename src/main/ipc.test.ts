@@ -19,12 +19,25 @@ vi.mock('./db', () => ({
   listAnnotations: vi.fn(),
   createAnnotation: vi.fn(),
   updateAnnotation: vi.fn(),
-  deleteAnnotation: vi.fn()
+  deleteAnnotation: vi.fn(),
+  recordProjectOpen: vi.fn(),
+  listRecentProjects: vi.fn(),
+  deleteProject: vi.fn(),
+  getProjectDashboard: vi.fn(),
+  getSearchIndex: vi.fn(),
+  putSearchIndex: vi.fn()
+}))
+
+vi.mock('./project', () => ({
+  scanProjectPdfs: vi.fn(),
+  folderExists: vi.fn(),
+  flattenProjectFiles: vi.fn()
 }))
 
 import { ipcMain, dialog } from 'electron'
 import { readFileSync } from 'fs'
 import * as db from './db'
+import * as project from './project'
 import { registerIpcHandlers } from './ipc'
 
 type HandlerFn = (_event: unknown, ...args: unknown[]) => unknown
@@ -49,6 +62,12 @@ describe('registerIpcHandlers', () => {
     expect(channels).toContain('annotations:create')
     expect(channels).toContain('annotations:update')
     expect(channels).toContain('annotations:delete')
+    expect(channels).toContain('project:open')
+    expect(channels).toContain('project:scan')
+    expect(channels).toContain('project:dashboard')
+    expect(channels).toContain('project:listRecent')
+    expect(channels).toContain('searchIndex:get')
+    expect(channels).toContain('searchIndex:put')
   })
 
   describe('pdf:open', () => {
@@ -127,6 +146,79 @@ describe('registerIpcHandlers', () => {
     it('calls deleteAnnotation and returns null', () => {
       const result = getHandler('annotations:delete')({}, 'ann-1')
       expect(db.deleteAnnotation).toHaveBeenCalledWith('ann-1')
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('project:open', () => {
+    it('returns null when dialog is canceled', async () => {
+      vi.mocked(dialog.showOpenDialog).mockResolvedValue({ canceled: true, filePaths: [] })
+      const result = await getHandler('project:open')({})
+      expect(result).toBeNull()
+    })
+
+    it('returns the selected directory path', async () => {
+      vi.mocked(dialog.showOpenDialog).mockResolvedValue({
+        canceled: false,
+        filePaths: ['/project']
+      })
+      const result = await getHandler('project:open')({})
+      expect(dialog.showOpenDialog).toHaveBeenCalledWith({ properties: ['openDirectory'] })
+      expect(result).toBe('/project')
+    })
+  })
+
+  describe('project:scan', () => {
+    it('scans the project and records it as opened', () => {
+      const scan = { path: '/project', name: 'project', tree: [] }
+      vi.mocked(project.scanProjectPdfs).mockReturnValue(scan)
+      const result = getHandler('project:scan')({}, '/project')
+      expect(project.scanProjectPdfs).toHaveBeenCalledWith('/project')
+      expect(db.recordProjectOpen).toHaveBeenCalledWith({ path: '/project', name: 'project' })
+      expect(result).toBe(scan)
+    })
+  })
+
+  describe('project:dashboard', () => {
+    it('flattens project files and delegates to getProjectDashboard', () => {
+      const scan = { path: '/project', name: 'project', tree: [] }
+      const dashboard = { documents: [], resumeDocument: null, recentMarks: [] }
+      vi.mocked(project.flattenProjectFiles).mockReturnValue(['/project/a.pdf'])
+      vi.mocked(db.getProjectDashboard).mockReturnValue(dashboard)
+      const result = getHandler('project:dashboard')({}, scan)
+      expect(project.flattenProjectFiles).toHaveBeenCalledWith(scan.tree)
+      expect(db.getProjectDashboard).toHaveBeenCalledWith(['/project/a.pdf'])
+      expect(result).toBe(dashboard)
+    })
+  })
+
+  describe('project:listRecent', () => {
+    it('filters missing paths and deletes stale rows', () => {
+      const rows = [
+        { path: '/alive', name: 'alive', first_opened_at: 1, last_opened_at: 2, open_count: 1 },
+        { path: '/missing', name: 'missing', first_opened_at: 1, last_opened_at: 2, open_count: 1 }
+      ]
+      vi.mocked(db.listRecentProjects).mockReturnValue(rows)
+      vi.mocked(project.folderExists).mockImplementation((path) => path === '/alive')
+      const result = getHandler('project:listRecent')({})
+      expect(result).toEqual([rows[0]])
+      expect(db.deleteProject).toHaveBeenCalledWith('/missing')
+    })
+  })
+
+  describe('searchIndex:get', () => {
+    it('delegates to getSearchIndex', () => {
+      vi.mocked(db.getSearchIndex).mockReturnValue(['page'])
+      const result = getHandler('searchIndex:get')({}, 'doc-1')
+      expect(db.getSearchIndex).toHaveBeenCalledWith('doc-1')
+      expect(result).toEqual(['page'])
+    })
+  })
+
+  describe('searchIndex:put', () => {
+    it('stores pages and returns null', () => {
+      const result = getHandler('searchIndex:put')({}, 'doc-1', ['page'])
+      expect(db.putSearchIndex).toHaveBeenCalledWith('doc-1', ['page'])
       expect(result).toBeNull()
     })
   })

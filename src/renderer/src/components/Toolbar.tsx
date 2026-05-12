@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { HIGHLIGHT_COLORS, type HighlightColor } from './useAnnotations'
+import { HomeIcon } from './icons'
 
 interface ToolbarProps {
   filename: string | null
@@ -7,6 +8,7 @@ interface ToolbarProps {
   atMin: boolean
   atMax: boolean
   onOpen: () => void
+  showOpenButton?: boolean
   onZoomIn: () => void
   onZoomOut: () => void
   onZoomReset: () => void
@@ -20,6 +22,8 @@ interface ToolbarProps {
   onHighlightSelection: (color: HighlightColor) => void
   noteMode: boolean
   onToggleNoteMode: () => void
+  onDismissDocument?: () => void
+  projectName?: string | null
 }
 
 export default function Toolbar({
@@ -28,6 +32,7 @@ export default function Toolbar({
   atMin,
   atMax,
   onOpen,
+  showOpenButton = true,
   onZoomIn,
   onZoomOut,
   onZoomReset,
@@ -40,7 +45,9 @@ export default function Toolbar({
   showAnnotationControls,
   onHighlightSelection,
   noteMode,
-  onToggleNoteMode
+  onToggleNoteMode,
+  onDismissDocument,
+  projectName
 }: ToolbarProps): React.JSX.Element {
   const [pageInput, setPageInput] = useState(String(currentPage))
   const [hasSelection, setHasSelection] = useState(false)
@@ -74,19 +81,36 @@ export default function Toolbar({
           </svg>
         </button>
       )}
-      <button
-        onClick={(e) => {
-          ;(e.currentTarget as HTMLButtonElement).blur()
-          onOpen()
-        }}
-        title="Open PDF"
-      >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M2 4.5a1 1 0 0 1 1-1h3.5l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4.5z" />
-        </svg>
-        Open PDF
-      </button>
-      {filename && <span className="pdf-filename">{filename}</span>}
+      {showOpenButton && (
+        <button
+          onClick={(e) => {
+            ;(e.currentTarget as HTMLButtonElement).blur()
+            onOpen()
+          }}
+          title="Open PDF"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 4.5a1 1 0 0 1 1-1h3.5l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4.5z" />
+          </svg>
+          Open PDF
+        </button>
+      )}
+      {filename && (
+        <span className="pdf-filename">
+          {onDismissDocument && (
+            <button
+              type="button"
+              className="pdf-filename__back"
+              onClick={onDismissDocument}
+              title={projectName ? `Back to ${projectName}` : 'Back to project'}
+              aria-label={projectName ? `Back to ${projectName}` : 'Back to project'}
+            >
+              <HomeIcon size={15} />
+            </button>
+          )}
+          <span className="pdf-filename__text">{filename}</span>
+        </span>
+      )}
       {showAnnotationControls && (
         <div className="annotation-controls" role="group" aria-label="Annotations">
           {HIGHLIGHT_COLORS.map((c, i) => (

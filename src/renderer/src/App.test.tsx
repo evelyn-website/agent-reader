@@ -33,16 +33,27 @@ vi.mock('./components/Toolbar', () => ({
   default: ({
     filename,
     numPages,
-    onOpen
+    onOpen,
+    showOpenButton = true,
+    onDismissDocument
   }: {
     filename: string | null
     numPages: number
     onOpen: () => void | Promise<void>
+    showOpenButton?: boolean
+    onDismissDocument?: () => void
   }) => (
     <div data-testid="toolbar">
-      <button type="button" onClick={() => void onOpen()}>
-        Open PDF
-      </button>
+      {showOpenButton && (
+        <button type="button" onClick={() => void onOpen()}>
+          Open PDF
+        </button>
+      )}
+      {onDismissDocument && (
+        <button type="button" onClick={onDismissDocument}>
+          Back to project
+        </button>
+      )}
       <span data-testid="filename">{filename ?? ''}</span>
       <span data-testid="num-pages">{numPages}</span>
     </div>
@@ -70,7 +81,17 @@ vi.mock('./components/MarksTabContent', () => ({
 }))
 
 vi.mock('./components/EmptyLauncher', () => ({
-  default: () => <div data-testid="empty-launcher" />
+  default: ({
+    onOpenRecent
+  }: {
+    onOpenRecent: (path: string) => void | Promise<void>
+  }) => (
+    <div data-testid="empty-launcher">
+      <button type="button" onClick={() => void onOpenRecent('/project')}>
+        Open recent project
+      </button>
+    </div>
+  )
 }))
 
 vi.mock('./components/useZoom', () => ({
@@ -134,10 +155,6 @@ vi.mock('./components/useAnnotations', () => ({
   })
 }))
 
-vi.mock('./components/pdfProxyCache', () => ({
-  clearAll: vi.fn()
-}))
-
 type ReadPdfResult = {
   data: Buffer
   document: DocumentRow
@@ -198,6 +215,27 @@ beforeEach(() => {
   })
   window.api.openPdf = vi.fn()
   window.api.readPdf = vi.fn()
+  window.api.project.scan = vi.fn().mockResolvedValue({
+    path: '/project',
+    name: 'Project',
+    tree: [{ kind: 'file', name: 'one.pdf', path: '/project/one.pdf' }]
+  })
+  window.api.project.dashboard = vi.fn().mockResolvedValue({
+    documents: [
+      {
+        path: '/project/one.pdf',
+        name: 'one.pdf',
+        document_id: null,
+        last_opened_at: null,
+        open_count: 0,
+        mark_count: 0,
+        highlight_count: 0,
+        note_count: 0
+      }
+    ],
+    resumeDocument: null,
+    recentMarks: []
+  })
   window.api.project.listRecent = vi.fn().mockResolvedValue([])
 })
 
@@ -211,6 +249,8 @@ describe('App — PDF switching boundary', () => {
     vi.mocked(window.api.readPdf).mockResolvedValueOnce(makeReadResult('doc-1', '/docs/one.pdf'))
 
     render(<App />)
+
+    expect(screen.getByRole('button', { name: 'Open PDF' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Open PDF' }))
 
@@ -252,5 +292,33 @@ describe('App — PDF switching boundary', () => {
     await waitFor(() => expect(screen.getByTestId('num-pages')).toHaveTextContent('3'))
     expect(window.api.readPdf).toHaveBeenNthCalledWith(1, '/docs/one.pdf')
     expect(window.api.readPdf).toHaveBeenNthCalledWith(2, '/docs/two.pdf')
+  })
+
+  it('can dismiss an open project document back to the project dashboard', async () => {
+    vi.mocked(window.api.readPdf).mockResolvedValue(makeReadResult('doc-1', '/project/one.pdf'))
+
+    render(<App />)
+
+    expect(screen.getByRole('button', { name: 'Open PDF' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open recent project' }))
+
+    expect(await screen.findByRole('heading', { name: 'Project' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Open PDF' })).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: /one\.pdf/i }))
+
+    await waitFor(() => expect(screen.getByTestId('filename')).toHaveTextContent('one.pdf'))
+    await flushAnimationFrames()
+    expect(await screen.findByTestId('pdf-viewer')).toHaveTextContent('doc-1')
+    expect(screen.queryByRole('button', { name: 'Open PDF' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to project' }))
+
+    await waitFor(() => expect(screen.queryByTestId('pdf-viewer')).toBeNull())
+    expect(screen.getByRole('heading', { name: 'Project' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /one\.pdf/i })).toBeInTheDocument()
+    expect(screen.getByTestId('filename')).toHaveTextContent('')
+    expect(screen.getByTestId('num-pages')).toHaveTextContent('0')
+    expectLastPageDimensionsClear()
   })
 })

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import MarksTabContent, { formatRelativeTime, emptyMessage } from './MarksTabContent'
 import type { Annotation, UseAnnotationsResult } from './useAnnotations'
+import type { ProjectMarkSummary } from '../../../main/db'
 
 const NOW = 1_700_000_000_000
 
@@ -208,5 +209,34 @@ describe('MarksTabContent', () => {
     )
     fireEvent.click(screen.getByLabelText('Delete mark'))
     expect(deleteAnnotation).toHaveBeenCalledWith('ann-1')
+  })
+
+  it('shows project marks when no document is focused', () => {
+    const mark: ProjectMarkSummary = {
+      id: 'pm-1',
+      document_id: 'doc-1',
+      path: '/project/a.pdf',
+      document_name: 'a.pdf',
+      page_number: 7,
+      kind: 'highlight',
+      color: 'yellow',
+      text_excerpt: 'project-wide text',
+      comment: null,
+      created_at: NOW,
+      updated_at: NOW
+    }
+    const onOpenProjectMark = vi.fn()
+    render(
+      <MarksTabContent
+        projectMarks={[mark]}
+        onJumpToPage={vi.fn()}
+        onOpenProjectMark={onOpenProjectMark}
+        hasDocument={false}
+      />
+    )
+    expect(screen.getByText('a.pdf')).toBeTruthy()
+    fireEvent.click(screen.getByText('project-wide text'))
+    expect(onOpenProjectMark).toHaveBeenCalledWith(mark)
+    expect(screen.queryByLabelText('Delete mark')).toBeNull()
   })
 })

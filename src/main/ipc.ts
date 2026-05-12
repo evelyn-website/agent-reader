@@ -14,13 +14,15 @@ import {
   recordProjectOpen,
   listRecentProjects,
   deleteProject,
+  getProjectDashboard,
   getSearchIndex,
   putSearchIndex,
   type CreateAnnotationInput,
+  type ProjectDashboard,
   type ProjectRow,
   type UpdateAnnotationInput
 } from './db'
-import { scanProjectPdfs, folderExists, type ProjectScan } from './project'
+import { scanProjectPdfs, folderExists, flattenProjectFiles, type ProjectScan } from './project'
 
 export function registerIpcHandlers(): void {
   ipcMain.on('ping', () => console.log('pong'))
@@ -75,6 +77,10 @@ export function registerIpcHandlers(): void {
     const scan = scanProjectPdfs(path)
     recordProjectOpen({ path: scan.path, name: scan.name })
     return scan
+  })
+
+  ipcMain.handle('project:dashboard', (_event, scan: ProjectScan): ProjectDashboard => {
+    return getProjectDashboard(flattenProjectFiles(scan.tree))
   })
 
   ipcMain.handle('searchIndex:get', (_event, documentId: string) => {

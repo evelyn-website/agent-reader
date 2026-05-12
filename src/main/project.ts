@@ -74,6 +74,15 @@ export function scanProjectPdfs(rootPath: string): ProjectScan {
   return { path: rootPath, name: basename(rootPath), tree }
 }
 
+export function flattenProjectFiles(nodes: FileNode[]): string[] {
+  const paths: string[] = []
+  for (const node of nodes) {
+    if (node.kind === 'file') paths.push(node.path)
+    else paths.push(...flattenProjectFiles(node.children))
+  }
+  return paths
+}
+
 export function folderExists(path: string): boolean {
   try {
     return statSync(path).isDirectory()

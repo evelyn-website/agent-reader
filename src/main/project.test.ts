@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { scanProjectPdfs, folderExists, type FileNode } from './project'
+import { scanProjectPdfs, folderExists, flattenProjectFiles, type FileNode } from './project'
 
 function flatten(nodes: FileNode[]): { kind: string; name: string }[] {
   const out: { kind: string; name: string }[] = []
@@ -88,5 +88,20 @@ describe('folderExists', () => {
 
   it('returns false for a missing path', () => {
     expect(folderExists(join(tmpdir(), 'definitely-not-here-' + Date.now()))).toBe(false)
+  })
+})
+
+describe('flattenProjectFiles', () => {
+  it('returns PDF file paths from a nested project tree in tree order', () => {
+    const tree: FileNode[] = [
+      {
+        kind: 'dir',
+        name: 'cases',
+        path: '/project/cases',
+        children: [{ kind: 'file', name: 'a.pdf', path: '/project/cases/a.pdf' }]
+      },
+      { kind: 'file', name: 'b.pdf', path: '/project/b.pdf' }
+    ]
+    expect(flattenProjectFiles(tree)).toEqual(['/project/cases/a.pdf', '/project/b.pdf'])
   })
 })

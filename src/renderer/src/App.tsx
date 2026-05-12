@@ -7,17 +7,17 @@ import FilesTabContent from './components/FilesTabContent'
 import ChatTabContent from './components/ChatTabContent'
 import MarksTabContent from './components/MarksTabContent'
 import EmptyLauncher from './components/EmptyLauncher'
+import ProjectDashboard from './components/ProjectDashboard'
 import { useZoom } from './components/useZoom'
 import { useWindowedPages } from './components/useWindowedPages'
 import { useSearch } from './components/useSearch'
 import { useAnnotations, type HighlightColor } from './components/useAnnotations'
-import { clearAll as clearPdfProxyCache } from './components/pdfProxyCache'
 import { createDebug } from './lib/debug'
 import type { OutlineNode } from './components/loadToc'
 
 const dPerf = createDebug('pdf:perf')
 import type { SearchIndex } from './components/buildSearchIndex'
-import type { ProjectRow } from '../../main/db'
+import type { ProjectDashboard as ProjectDashboardData, ProjectMarkSummary, ProjectRow } from '../../main/db'
 import type { ProjectScan } from '../../main/project'
 import './assets/main.css'
 
@@ -44,6 +44,8 @@ function readPanelWidth(side: 'left' | 'right'): number {
 export default function App(): React.JSX.Element {
   const [pdf, setPdf] = useState<PdfFile | null>(null)
   const [project, setProject] = useState<ProjectScan | null>(null)
+  const [projectDashboard, setProjectDashboard] = useState<ProjectDashboardData | null>(null)
+  const [projectDashboardLoading, setProjectDashboardLoading] = useState(false)
   const [recentProjects, setRecentProjects] = useState<ProjectRow[]>([])
   const [numPages, setNumPages] = useState<number>(0)
   const [outline, setOutline] = useState<OutlineNode[]>([])
@@ -55,6 +57,7 @@ export default function App(): React.JSX.Element {
   const [noteMode, setNoteMode] = useState(false)
   const [viewerReady, setViewerReady] = useState(false)
   const switchTokenRef = useRef(0)
+  const pendingProjectJumpRef = useRef<number | null>(null)
   const pdfRef = useRef<PDFViewerHandle>(null)
   const leftOpenRef = useRef(leftOpen)
   const rightOpenRef = useRef(rightOpen)
@@ -171,6 +174,18 @@ export default function App(): React.JSX.Element {
     dPerf(`  loadPdfPath setPdf ${(performance.now() - t1).toFixed(1)}ms`)
   }, [windowed.setPageDimensions])
 
+  const dismissDocument = useCallback(() => {
+    switchTokenRef.current++
+    pendingProjectJumpRef.current = null
+    setViewerReady(false)
+    setPdf(null)
+    setOutline([])
+    setSearchIndex(null)
+    setNumPages(0)
+    windowed.setPageDimensions(new Map())
+    setNoteMode(false)
+  }, [windowed.setPageDimensions])
+
   const handleOpen = useCallback(async (): Promise<void> => {
     const path = await window.api.openPdf()
     if (!path) return
@@ -179,14 +194,39 @@ export default function App(): React.JSX.Element {
 
   const openProjectByPath = useCallback(async (path: string): Promise<void> => {
     const scan = await window.api.project.scan(path)
-    clearPdfProxyCache()
     switchTokenRef.current++
     setViewerReady(false)
     setPdf(null)
+    setProjectDashboard(null)
     setProject(scan)
     setLeftTab('files')
     setLeftOpen(true)
   }, [])
+
+  useEffect(() => {
+    if (!project || pdf) return
+    let cancelled = false
+    setProjectDashboardLoading(true)
+    window.api.project
+      .dashboard(project)
+      .then((dashboard) => {
+        if (!cancelled) setProjectDashboard(dashboard)
+      })
+      .catch((err) => console.error('project dashboard failed:', err))
+      .finally(() => {
+        if (!cancelled) setProjectDashboardLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [pdf, project])
+
+  useEffect(() => {
+    if (!viewerReady || numPages === 0 || pendingProjectJumpRef.current === null) return
+    const page = pendingProjectJumpRef.current
+    pendingProjectJumpRef.current = null
+    windowed.scrollToPage(page)
+  }, [numPages, viewerReady, windowed.scrollToPage])
 
   const handleOpenProject = useCallback(async (): Promise<void> => {
     const path = await window.api.project.open()
@@ -208,6 +248,14 @@ export default function App(): React.JSX.Element {
   const handleHighlightSelection = useCallback((color: HighlightColor) => {
     pdfRef.current?.triggerHighlight(color)
   }, [])
+
+  const openProjectMark = useCallback(
+    async (mark: ProjectMarkSummary): Promise<void> => {
+      pendingProjectJumpRef.current = mark.page_number
+      await loadPdfPath(mark.path)
+    },
+    [loadPdfPath]
+  )
 
   const leftTabs: SidePanelTab[] = [
     {
@@ -240,8 +288,10 @@ export default function App(): React.JSX.Element {
       label: 'Marks',
       content: (
         <MarksTabContent
-          annotations={annotations}
+          annotations={pdf ? annotations : undefined}
+          projectMarks={!pdf ? (projectDashboard?.recentMarks ?? []) : undefined}
           onJumpToPage={windowed.scrollToPage}
+          onOpenProjectMark={openProjectMark}
           hasDocument={pdf !== null}
         />
       )
@@ -256,6 +306,7 @@ export default function App(): React.JSX.Element {
         atMin={atMin}
         atMax={atMax}
         onOpen={handleOpen}
+        showOpenButton={project === null}
         onZoomIn={zoomIn}
         onZoomOut={zoomOut}
         onZoomReset={zoomReset}
@@ -269,6 +320,8 @@ export default function App(): React.JSX.Element {
         onHighlightSelection={handleHighlightSelection}
         noteMode={noteMode}
         onToggleNoteMode={() => setNoteMode((v) => !v)}
+        onDismissDocument={project && pdf ? dismissDocument : undefined}
+        projectName={project?.name ?? null}
       />
       <div className="main-area">
         {leftOpen && (
@@ -306,9 +359,13 @@ export default function App(): React.JSX.Element {
               <div className="pdf-viewer" />
             )
           ) : project ? (
-            <div className="empty-state empty-state--project">
-              <p>Select a document from Files</p>
-            </div>
+            <ProjectDashboard
+              project={project}
+              dashboard={projectDashboard}
+              loading={projectDashboardLoading}
+              onOpenDocument={loadPdfPath}
+              onOpenMark={openProjectMark}
+            />
           ) : (
             <EmptyLauncher
               onOpenPdf={handleOpen}

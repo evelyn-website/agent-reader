@@ -8,7 +8,8 @@ import {
   createAnnotation,
   listAnnotations,
   updateAnnotation,
-  deleteAnnotation
+  deleteAnnotation,
+  getProjectDashboard
 } from './index'
 
 const PDF_DATA = Buffer.from('fake-pdf-bytes')
@@ -167,6 +168,89 @@ describe('annotation CRUD', () => {
       await new Promise((r) => setTimeout(r, 2))
       const updated = updateAnnotation(ann.id, { comment: 'changed' })!
       expect(updated.updated_at).toBeGreaterThanOrEqual(ann.updated_at)
+    })
+  })
+})
+
+describe('project dashboard', () => {
+  let db: Database.Database
+
+  beforeEach(() => {
+    db = createDb(':memory:')
+    setDbForTesting(db)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    setDbForTesting(null)
+    db.close()
+  })
+
+  it('returns all scanned documents with DB metadata when available', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
+    const older = recordOpen({ path: '/project/a.pdf', data: Buffer.from('a') })
+    vi.setSystemTime(2000)
+    const newer = recordOpen({ path: '/project/b.pdf', data: Buffer.from('b') })
+    createAnnotation({ document_id: newer.id, page_number: 2, kind: 'highlight', color: 'yellow' })
+    createAnnotation({ document_id: newer.id, page_number: 3, kind: 'note', comment: 'note' })
+    createAnnotation({ document_id: older.id, page_number: 1, kind: 'highlight', color: 'blue' })
+
+    const dashboard = getProjectDashboard(['/project/a.pdf', '/project/unread.pdf', '/project/b.pdf'])
+
+    expect(dashboard.documents.map((d) => d.path)).toEqual([
+      '/project/b.pdf',
+      '/project/a.pdf',
+      '/project/unread.pdf'
+    ])
+    expect(dashboard.resumeDocument?.path).toBe('/project/b.pdf')
+    expect(dashboard.documents[0]).toMatchObject({
+      document_id: newer.id,
+      mark_count: 2,
+      highlight_count: 1,
+      note_count: 1
+    })
+    expect(dashboard.documents[2]).toMatchObject({
+      path: '/project/unread.pdf',
+      document_id: null,
+      open_count: 0,
+      mark_count: 0
+    })
+  })
+
+  it('returns recent marks for documents in the project only', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
+    const inProject = recordOpen({ path: '/project/a.pdf', data: Buffer.from('a') })
+    const outside = recordOpen({ path: '/other/outside.pdf', data: Buffer.from('outside') })
+    vi.setSystemTime(2000)
+    const oldMark = createAnnotation({
+      document_id: inProject.id,
+      page_number: 1,
+      kind: 'highlight',
+      text_excerpt: 'older'
+    })
+    vi.setSystemTime(3000)
+    const newMark = createAnnotation({
+      document_id: inProject.id,
+      page_number: 2,
+      kind: 'note',
+      comment: 'newer'
+    })
+    createAnnotation({
+      document_id: outside.id,
+      page_number: 1,
+      kind: 'highlight',
+      text_excerpt: 'outside'
+    })
+
+    const dashboard = getProjectDashboard(['/project/a.pdf'])
+
+    expect(dashboard.recentMarks.map((m) => m.id)).toEqual([newMark.id, oldMark.id])
+    expect(dashboard.recentMarks[0]).toMatchObject({
+      path: '/project/a.pdf',
+      document_name: 'a.pdf',
+      page_number: 2
     })
   })
 })

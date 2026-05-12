@@ -6,14 +6,30 @@ import {
   type UseAnnotationsResult
 } from './useAnnotations'
 import { AllIcon, ClockIcon, HighlightIcon, NoteIcon, PageIcon, TrashIcon } from './icons'
+import type { ProjectMarkSummary } from '../../../main/db'
 
 type KindFilter = 'all' | 'highlight' | 'note'
 type SortMode = 'page' | 'recent'
 
 interface Props {
-  annotations: UseAnnotationsResult
+  annotations?: UseAnnotationsResult
+  projectMarks?: ProjectMarkSummary[]
   onJumpToPage: (page: number) => void
+  onOpenProjectMark?: (mark: ProjectMarkSummary) => void
   hasDocument: boolean
+}
+
+interface MarkListItem {
+  id: string
+  pageNumber: number
+  kind: Annotation['kind']
+  color: HighlightColor | null
+  textExcerpt: string | null
+  comment: string | null
+  createdAt: number
+  updatedAt: number
+  documentName?: string
+  source?: ProjectMarkSummary
 }
 
 export function formatRelativeTime(ts: number): string {
@@ -39,7 +55,9 @@ export function emptyMessage(kind: KindFilter, color: HighlightColor | null): st
 
 export default function MarksTabContent({
   annotations,
+  projectMarks,
   onJumpToPage,
+  onOpenProjectMark,
   hasDocument
 }: Props): React.JSX.Element {
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
@@ -48,8 +66,35 @@ export default function MarksTabContent({
 
   const showColorRow = kindFilter !== 'note'
 
+  const allMarks = useMemo<MarkListItem[]>(() => {
+    if (hasDocument) {
+      return (annotations?.all ?? []).map((a) => ({
+        id: a.id,
+        pageNumber: a.pageNumber,
+        kind: a.kind,
+        color: a.color,
+        textExcerpt: a.textExcerpt,
+        comment: a.comment,
+        createdAt: a.createdAt,
+        updatedAt: a.updatedAt
+      }))
+    }
+    return (projectMarks ?? []).map((m) => ({
+      id: m.id,
+      pageNumber: m.page_number,
+      kind: m.kind,
+      color: (m.color as HighlightColor | null) ?? null,
+      textExcerpt: m.text_excerpt,
+      comment: m.comment,
+      createdAt: m.created_at,
+      updatedAt: m.updated_at,
+      documentName: m.document_name,
+      source: m
+    }))
+  }, [annotations?.all, hasDocument, projectMarks])
+
   const filtered = useMemo(() => {
-    return annotations.all.filter((a) => {
+    return allMarks.filter((a) => {
       if (kindFilter === 'highlight' && a.kind !== 'highlight') return false
       if (kindFilter === 'note' && a.kind !== 'note') return false
       if (showColorRow && colorFilter) {
@@ -57,19 +102,26 @@ export default function MarksTabContent({
       }
       return true
     })
-  }, [annotations.all, kindFilter, colorFilter, showColorRow])
+  }, [allMarks, kindFilter, colorFilter, showColorRow])
 
   const grouped = useMemo(() => {
     if (sort !== 'page') return []
-    const m = new Map<number, Annotation[]>()
+    const m = new Map<string, { label: string; sortKey: string | number; items: MarkListItem[] }>()
     for (const a of filtered) {
-      const arr = m.get(a.pageNumber)
-      if (arr) arr.push(a)
-      else m.set(a.pageNumber, [a])
+      const key = hasDocument ? `page-${a.pageNumber}` : `doc-${a.documentName ?? ''}`
+      const label = hasDocument ? `Page ${a.pageNumber}` : (a.documentName ?? 'Unknown document')
+      const existing = m.get(key)
+      if (existing) existing.items.push(a)
+      else m.set(key, { label, sortKey: hasDocument ? a.pageNumber : label, items: [a] })
     }
-    for (const arr of m.values()) arr.sort((a, b) => a.createdAt - b.createdAt)
-    return Array.from(m.entries()).sort((a, b) => a[0] - b[0])
-  }, [filtered, sort])
+    for (const group of m.values()) {
+      group.items.sort((a, b) => a.pageNumber - b.pageNumber || a.createdAt - b.createdAt)
+    }
+    return Array.from(m.values()).sort((a, b) => {
+      if (typeof a.sortKey === 'number' && typeof b.sortKey === 'number') return a.sortKey - b.sortKey
+      return String(a.sortKey).localeCompare(String(b.sortKey), undefined, { sensitivity: 'base' })
+    })
+  }, [filtered, hasDocument, sort])
 
   const recent = useMemo(() => {
     if (sort !== 'recent') return []
@@ -78,7 +130,7 @@ export default function MarksTabContent({
 
   const isEmpty = sort === 'page' ? grouped.length === 0 : recent.length === 0
 
-  if (!hasDocument) {
+  if (!hasDocument && projectMarks === undefined) {
     return <div className="tab-empty-state">Open a PDF to see marks</div>
   }
 
@@ -151,18 +203,27 @@ export default function MarksTabContent({
       </div>
 
       {isEmpty ? (
-        <div className="tab-empty-state">{emptyMessage(kindFilter, colorFilter)}</div>
+        <div className="tab-empty-state">
+          {hasDocument ? emptyMessage(kindFilter, colorFilter) : 'No project marks yet'}
+        </div>
       ) : sort === 'page' ? (
         <div className="marks-list">
-          {grouped.map(([page, items]) => (
-            <div key={page} className="marks-page-group">
-              <div className="marks-page-header">Page {page}</div>
-              {items.map((a) => (
+          {grouped.map((group) => (
+            <div key={group.label} className="marks-page-group">
+              <div className="marks-page-header">{group.label}</div>
+              {group.items.map((a) => (
                 <MarkRow
                   key={a.id}
                   annotation={a}
-                  onJump={() => onJumpToPage(a.pageNumber)}
-                  onDelete={() => void annotations.deleteAnnotation(a.id)}
+                  pageLabel={hasDocument ? undefined : `p.${a.pageNumber}`}
+                  onJump={() =>
+                    a.source && onOpenProjectMark ? onOpenProjectMark(a.source) : onJumpToPage(a.pageNumber)
+                  }
+                  onDelete={
+                    annotations && hasDocument
+                      ? () => void annotations.deleteAnnotation(a.id)
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -174,9 +235,13 @@ export default function MarksTabContent({
             <MarkRow
               key={a.id}
               annotation={a}
-              pageLabel={`p.${a.pageNumber}`}
-              onJump={() => onJumpToPage(a.pageNumber)}
-              onDelete={() => void annotations.deleteAnnotation(a.id)}
+              pageLabel={a.documentName ? `${a.documentName} · p.${a.pageNumber}` : `p.${a.pageNumber}`}
+              onJump={() =>
+                a.source && onOpenProjectMark ? onOpenProjectMark(a.source) : onJumpToPage(a.pageNumber)
+              }
+              onDelete={
+                annotations && hasDocument ? () => void annotations.deleteAnnotation(a.id) : undefined
+              }
             />
           ))}
         </div>
@@ -186,9 +251,9 @@ export default function MarksTabContent({
 }
 
 interface RowProps {
-  annotation: Annotation
+  annotation: MarkListItem
   onJump: () => void
-  onDelete: () => void
+  onDelete?: () => void
   pageLabel?: string
 }
 
@@ -240,17 +305,19 @@ function MarkRow({ annotation, onJump, onDelete, pageLabel }: RowProps): React.J
       <span className="marks-row__time" title={new Date(annotation.updatedAt).toLocaleString()}>
         {formatRelativeTime(annotation.updatedAt)}
       </span>
-      <button
-        className="marks-row__delete"
-        onClick={(e) => {
-          e.stopPropagation()
-          onDelete()
-        }}
-        aria-label="Delete mark"
-        title="Delete"
-      >
-        <TrashIcon />
-      </button>
+      {onDelete && (
+        <button
+          className="marks-row__delete"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+          aria-label="Delete mark"
+          title="Delete"
+        >
+          <TrashIcon />
+        </button>
+      )}
     </div>
   )
 }
