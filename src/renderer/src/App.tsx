@@ -58,6 +58,7 @@ export default function App(): React.JSX.Element {
   const [viewerReady, setViewerReady] = useState(false)
   const switchTokenRef = useRef(0)
   const pendingProjectJumpRef = useRef<number | null>(null)
+  const projectPageCacheRef = useRef<Map<string, number>>(new Map())
   const pdfRef = useRef<PDFViewerHandle>(null)
   const leftOpenRef = useRef(leftOpen)
   const rightOpenRef = useRef(rightOpen)
@@ -146,9 +147,14 @@ export default function App(): React.JSX.Element {
 
   const { scale, zoomIn, zoomOut, zoomReset, zoomTo, atMin, atMax } = useZoom()
   const windowed = useWindowedPages(numPages, scale)
+  const currentPageRef = useRef(windowed.currentPage)
   const [searchIndex, setSearchIndex] = useState<SearchIndex | null>(null)
   const search = useSearch(searchIndex, windowed.scrollToPage)
   const annotations = useAnnotations(pdf?.documentId ?? null)
+
+  useEffect(() => {
+    currentPageRef.current = windowed.currentPage
+  }, [windowed.currentPage])
 
   const loadPdfPath = useCallback(async (path: string): Promise<void> => {
     const switchToken = ++switchTokenRef.current
@@ -186,6 +192,11 @@ export default function App(): React.JSX.Element {
     setNoteMode(false)
   }, [windowed.setPageDimensions])
 
+  const rememberCurrentProjectPage = useCallback(() => {
+    if (!project || !pdf) return
+    projectPageCacheRef.current.set(pdf.path, currentPageRef.current)
+  }, [pdf, project])
+
   const handleOpen = useCallback(async (): Promise<void> => {
     const path = await window.api.openPdf()
     if (!path) return
@@ -198,6 +209,7 @@ export default function App(): React.JSX.Element {
     setViewerReady(false)
     setPdf(null)
     setProjectDashboard(null)
+    projectPageCacheRef.current.clear()
     setProject(scan)
     setLeftTab('files')
     setLeftOpen(true)
@@ -251,10 +263,20 @@ export default function App(): React.JSX.Element {
 
   const openProjectMark = useCallback(
     async (mark: ProjectMarkSummary): Promise<void> => {
+      rememberCurrentProjectPage()
       pendingProjectJumpRef.current = mark.page_number
       await loadPdfPath(mark.path)
     },
-    [loadPdfPath]
+    [loadPdfPath, rememberCurrentProjectPage]
+  )
+
+  const openProjectDocument = useCallback(
+    async (path: string): Promise<void> => {
+      rememberCurrentProjectPage()
+      pendingProjectJumpRef.current = projectPageCacheRef.current.get(path) ?? null
+      await loadPdfPath(path)
+    },
+    [loadPdfPath, rememberCurrentProjectPage]
   )
 
   const leftTabs: SidePanelTab[] = [
@@ -265,7 +287,7 @@ export default function App(): React.JSX.Element {
         <FilesTabContent
           project={project}
           activePath={pdf?.path ?? null}
-          onOpenFile={loadPdfPath}
+          onOpenFile={openProjectDocument}
         />
       )
     },
@@ -363,7 +385,7 @@ export default function App(): React.JSX.Element {
               project={project}
               dashboard={projectDashboard}
               loading={projectDashboardLoading}
-              onOpenDocument={loadPdfPath}
+              onOpenDocument={openProjectDocument}
               onOpenMark={openProjectMark}
             />
           ) : (

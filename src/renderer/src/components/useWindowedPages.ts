@@ -6,6 +6,7 @@ const ESTIMATED_HEIGHT = 1100
 const PIN_TIMEOUT_MS = 2000
 const GAP_PX = 16
 const INNER_PAD_TOP_PX = 16
+const DOMINANT_PAGE_VIEWPORT_THRESHOLD = 0.75
 // Probe just below the top of the viewport — small enough that we never
 // "skip" a page when zoomed way out (where pages may be smaller than
 // fraction-based probes), large enough to ignore subpixel rounding.
@@ -126,9 +127,15 @@ export function useWindowedPages(
     const container = scrollContainerRef.current ?? findContainer()
     if (!container) return null
     const containerRect = container.getBoundingClientRect()
+    const viewportHeight = Math.max(1, containerRect.height)
     const probeY = containerRect.top + ACTIVE_PAGE_PROBE_OFFSET
     let best: number | null = null
     let bestDistance = Infinity
+    for (const [n, el] of pageRefs.current) {
+      const r = el.getBoundingClientRect()
+      const visibleHeight = Math.min(r.bottom, containerRect.bottom) - Math.max(r.top, containerRect.top)
+      if (visibleHeight / viewportHeight > DOMINANT_PAGE_VIEWPORT_THRESHOLD) return n
+    }
     for (const [n, el] of pageRefs.current) {
       const r = el.getBoundingClientRect()
       if (r.top <= probeY && r.bottom >= probeY) return n

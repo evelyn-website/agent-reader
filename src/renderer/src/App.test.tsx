@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import App from './App'
 import type { DocumentRow } from '../../main/db'
 
 const appMocks = vi.hoisted(() => ({
+  currentPage: 1,
+  scrollToPage: vi.fn(),
   setPageDimensions: vi.fn()
 }))
 
@@ -61,7 +64,17 @@ vi.mock('./components/Toolbar', () => ({
 }))
 
 vi.mock('./components/SidePanel', () => ({
-  default: () => <aside data-testid="side-panel" />
+  default: ({
+    tabs,
+    activeTabId
+  }: {
+    tabs: Array<{ id: string; content: ReactNode }>
+    activeTabId: string
+  }) => (
+    <aside data-testid="side-panel">
+      {tabs.find((tab) => tab.id === activeTabId)?.content ?? null}
+    </aside>
+  )
 }))
 
 vi.mock('./components/OutlineTabContent', () => ({
@@ -69,7 +82,20 @@ vi.mock('./components/OutlineTabContent', () => ({
 }))
 
 vi.mock('./components/FilesTabContent', () => ({
-  default: () => <div />
+  default: ({
+    onOpenFile
+  }: {
+    onOpenFile: (path: string) => void | Promise<void>
+  }) => (
+    <div>
+      <button type="button" onClick={() => void onOpenFile('/project/one.pdf')}>
+        Open one from files tab
+      </button>
+      <button type="button" onClick={() => void onOpenFile('/project/two.pdf')}>
+        Open two from files tab
+      </button>
+    </div>
+  )
 }))
 
 vi.mock('./components/ChatTabContent', () => ({
@@ -108,7 +134,7 @@ vi.mock('./components/useZoom', () => ({
 
 vi.mock('./components/useWindowedPages', () => ({
   useWindowedPages: () => ({
-    currentPage: 1,
+    currentPage: appMocks.currentPage,
     layout: {
       topSpacer: 0,
       windowA: { from: 1, to: 1 },
@@ -119,7 +145,7 @@ vi.mock('./components/useWindowedPages', () => ({
     setPageRef: vi.fn(),
     getPlaceholderHeight: vi.fn().mockReturnValue(800),
     onPageRenderSuccess: vi.fn(),
-    scrollToPage: vi.fn(),
+    scrollToPage: appMocks.scrollToPage,
     setPageDimensions: appMocks.setPageDimensions
   })
 }))
@@ -206,6 +232,8 @@ async function flushAnimationFrames(): Promise<void> {
 }
 
 beforeEach(() => {
+  appMocks.currentPage = 1
+  appMocks.scrollToPage.mockClear()
   appMocks.setPageDimensions.mockClear()
   rafCallbacks = []
   originalRequestAnimationFrame = window.requestAnimationFrame
@@ -218,13 +246,26 @@ beforeEach(() => {
   window.api.project.scan = vi.fn().mockResolvedValue({
     path: '/project',
     name: 'Project',
-    tree: [{ kind: 'file', name: 'one.pdf', path: '/project/one.pdf' }]
+    tree: [
+      { kind: 'file', name: 'one.pdf', path: '/project/one.pdf' },
+      { kind: 'file', name: 'two.pdf', path: '/project/two.pdf' }
+    ]
   })
   window.api.project.dashboard = vi.fn().mockResolvedValue({
     documents: [
       {
         path: '/project/one.pdf',
         name: 'one.pdf',
+        document_id: null,
+        last_opened_at: null,
+        open_count: 0,
+        mark_count: 0,
+        highlight_count: 0,
+        note_count: 0
+      },
+      {
+        path: '/project/two.pdf',
+        name: 'two.pdf',
         document_id: null,
         last_opened_at: null,
         open_count: 0,
@@ -320,5 +361,40 @@ describe('App — PDF switching boundary', () => {
     expect(screen.getByTestId('filename')).toHaveTextContent('')
     expect(screen.getByTestId('num-pages')).toHaveTextContent('0')
     expectLastPageDimensionsClear()
+  })
+
+  it('restores the cached page when switching back to a project document from the files tab', async () => {
+    vi.mocked(window.api.readPdf).mockImplementation(async (path: string) =>
+      makeReadResult(path.endsWith('one.pdf') ? 'doc-1' : 'doc-2', path)
+    )
+
+    const { rerender } = render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open recent project' }))
+    fireEvent.click(await screen.findByRole('button', { name: /one\.pdf/i }))
+    await waitFor(() => expect(screen.getByTestId('filename')).toHaveTextContent('one.pdf'))
+    await flushAnimationFrames()
+    expect(await screen.findByTestId('pdf-viewer')).toHaveTextContent('doc-1')
+    await waitFor(() => expect(screen.getByTestId('num-pages')).toHaveTextContent('12'))
+
+    appMocks.currentPage = 7
+    rerender(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open two from files tab' }))
+    await waitFor(() => expect(screen.getByTestId('filename')).toHaveTextContent('two.pdf'))
+    await flushAnimationFrames()
+    expect(await screen.findByTestId('pdf-viewer')).toHaveTextContent('doc-2')
+    await waitFor(() => expect(screen.getByTestId('num-pages')).toHaveTextContent('3'))
+    expect(appMocks.scrollToPage).not.toHaveBeenCalled()
+
+    appMocks.currentPage = 2
+    rerender(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open one from files tab' }))
+    await waitFor(() => expect(screen.getByTestId('filename')).toHaveTextContent('one.pdf'))
+    await flushAnimationFrames()
+    expect(await screen.findByTestId('pdf-viewer')).toHaveTextContent('doc-1')
+    await waitFor(() => expect(screen.getByTestId('num-pages')).toHaveTextContent('12'))
+    expect(appMocks.scrollToPage).toHaveBeenCalledWith(7)
   })
 })
