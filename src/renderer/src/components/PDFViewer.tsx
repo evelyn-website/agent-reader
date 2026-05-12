@@ -57,7 +57,7 @@ const HIDDEN_STYLE: React.CSSProperties = {
 }
 
 interface SwappablePageProps {
-  pdf: PDFDocumentProxy
+  documentId: string
   pageNumber: number
   scale: number
   onRendered: (height: number) => void
@@ -73,7 +73,7 @@ const BACK_SLOT_TEARDOWN_MS = 500
 const BACK_RENDER_DEBOUNCE_MS = 120
 
 function SwappablePage({
-  pdf,
+  documentId,
   pageNumber,
   scale,
   onRendered,
@@ -161,8 +161,7 @@ function SwappablePage({
       {slots.a !== null && (
         <div ref={slotARef} style={front === 'a' ? undefined : HIDDEN_STYLE}>
           <Page
-            key={`a-${slots.a}`}
-            pdf={pdf}
+            key={`${documentId}-a-${slots.a}`}
             pageNumber={pageNumber}
             scale={slots.a}
             renderTextLayer={true}
@@ -175,8 +174,7 @@ function SwappablePage({
       {slots.b !== null && (
         <div ref={slotBRef} style={front === 'b' ? undefined : HIDDEN_STYLE}>
           <Page
-            key={`b-${slots.b}`}
-            pdf={pdf}
+            key={`${documentId}-b-${slots.b}`}
             pageNumber={pageNumber}
             scale={slots.b}
             renderTextLayer={true}
@@ -194,7 +192,7 @@ function SwappablePage({
 }
 
 function renderWindow(
-  pdf: PDFDocumentProxy,
+  documentId: string,
   range: { from: number; to: number },
   scale: number,
   setPageRef: (n: number, el: HTMLDivElement | null) => void,
@@ -216,7 +214,8 @@ function renderWindow(
         onMouseDown={(e) => void onPageMouseDown(n, e)}
       >
         <SwappablePage
-          pdf={pdf}
+          key={`${documentId}-${n}`}
+          documentId={documentId}
           pageNumber={n}
           scale={scale}
           onRendered={(height) => onPageRenderSuccess(n, height)}
@@ -240,6 +239,8 @@ const HTML_ESCAPE: Record<string, string> = {
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => HTML_ESCAPE[c])
 }
+
+const plainTextRenderer: TextRenderer = ({ str }) => escapeHtml(str)
 
 function buildTextRenderer(regex: RegExp | null): TextRenderer | undefined {
   if (!regex) return undefined
@@ -287,7 +288,11 @@ function PDFViewerInner(
   }: PDFViewerProps,
   ref: React.Ref<PDFViewerHandle>
 ): React.JSX.Element {
-  const [pdfProxy, setPdfProxy] = useState<PDFDocumentProxy | null>(null)
+  const [loadedPdfProxy, setLoadedPdfProxy] = useState<{
+    documentId: string
+    pdf: PDFDocumentProxy
+  } | null>(null)
+  const pdfProxy = loadedPdfProxy?.documentId === documentId ? loadedPdfProxy.pdf : null
   const switchStartRef = useRef<number | null>(null)
   const firstRenderLoggedForRef = useRef<string | null>(null)
   const linkServiceRef = useRef(new LinkService())
@@ -413,7 +418,7 @@ function PDFViewerInner(
   )
 
   const customTextRenderer = useMemo(
-    () => buildTextRenderer(search.highlightRegex),
+    () => buildTextRenderer(search.highlightRegex) ?? plainTextRenderer,
     [search.highlightRegex]
   )
 
@@ -549,7 +554,7 @@ function PDFViewerInner(
       const tProxy = performance.now()
       if (cancelled) return
       linkServiceRef.current.setDocument(pdf)
-      setPdfProxy(pdf)
+      setLoadedPdfProxy({ documentId, pdf })
       setNumPages(pdf.numPages)
       const tSet = performance.now()
       dPerf(`  ${id} proxy-ready ${(tProxy - tStart).toFixed(1)}ms; setState ${(tSet - tProxy).toFixed(1)}ms`)
@@ -624,7 +629,7 @@ function PDFViewerInner(
                 <div className="pdf-spacer" style={{ height: layout.topSpacer }} />
               )}
               {renderWindow(
-                pdfProxy,
+                documentId,
                 layout.windowA,
                 scale,
                 setPageRefCombined,
@@ -639,7 +644,7 @@ function PDFViewerInner(
               )}
               {layout.windowB &&
                 renderWindow(
-                  pdfProxy,
+                  documentId,
                   layout.windowB,
                   scale,
                   setPageRefCombined,

@@ -55,12 +55,9 @@ export function registerIpcHandlers(): void {
     return createAnnotation(input)
   })
 
-  ipcMain.handle(
-    'annotations:update',
-    (_event, id: string, patch: UpdateAnnotationInput) => {
-      return updateAnnotation(id, patch)
-    }
-  )
+  ipcMain.handle('annotations:update', (_event, id: string, patch: UpdateAnnotationInput) => {
+    return updateAnnotation(id, patch)
+  })
 
   ipcMain.handle('annotations:delete', (_event, id: string) => {
     deleteAnnotation(id)
@@ -84,13 +81,10 @@ export function registerIpcHandlers(): void {
     return getSearchIndex(documentId)
   })
 
-  ipcMain.handle(
-    'searchIndex:put',
-    (_event, documentId: string, pageTexts: string[]) => {
-      putSearchIndex(documentId, pageTexts)
-      return null
-    }
-  )
+  ipcMain.handle('searchIndex:put', (_event, documentId: string, pageTexts: string[]) => {
+    putSearchIndex(documentId, pageTexts)
+    return null
+  })
 
   ipcMain.handle('project:listRecent', (): ProjectRow[] => {
     const rows = listRecentProjects()

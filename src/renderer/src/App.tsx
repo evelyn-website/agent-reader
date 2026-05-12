@@ -53,6 +53,8 @@ export default function App(): React.JSX.Element {
   const [rightTab, setRightTab] = useState<RightTabId>('chat')
   const focusModeSnapshot = useRef<{ left: boolean; right: boolean } | null>(null)
   const [noteMode, setNoteMode] = useState(false)
+  const [viewerReady, setViewerReady] = useState(false)
+  const switchTokenRef = useRef(0)
   const pdfRef = useRef<PDFViewerHandle>(null)
   const leftOpenRef = useRef(leftOpen)
   const rightOpenRef = useRef(rightOpen)
@@ -146,9 +148,12 @@ export default function App(): React.JSX.Element {
   const annotations = useAnnotations(pdf?.documentId ?? null)
 
   const loadPdfPath = useCallback(async (path: string): Promise<void> => {
+    const switchToken = ++switchTokenRef.current
     const t0 = performance.now()
     dPerf(`click→loadPdfPath START ${path.split('/').pop()}`)
+    setViewerReady(false)
     const { data, document } = await window.api.readPdf(path)
+    if (switchToken !== switchTokenRef.current) return
     const t1 = performance.now()
     dPerf(
       `  loadPdfPath readPdf IPC ${(t1 - t0).toFixed(1)}ms ` +
@@ -156,10 +161,15 @@ export default function App(): React.JSX.Element {
     )
     setOutline([])
     setSearchIndex(null)
+    setNumPages(0)
+    windowed.setPageDimensions(new Map())
     setNoteMode(false)
     setPdf({ path, data, documentId: document.id })
+    requestAnimationFrame(() => {
+      if (switchToken === switchTokenRef.current) setViewerReady(true)
+    })
     dPerf(`  loadPdfPath setPdf ${(performance.now() - t1).toFixed(1)}ms`)
-  }, [])
+  }, [windowed.setPageDimensions])
 
   const handleOpen = useCallback(async (): Promise<void> => {
     const path = await window.api.openPdf()
@@ -170,6 +180,8 @@ export default function App(): React.JSX.Element {
   const openProjectByPath = useCallback(async (path: string): Promise<void> => {
     const scan = await window.api.project.scan(path)
     clearPdfProxyCache()
+    switchTokenRef.current++
+    setViewerReady(false)
     setPdf(null)
     setProject(scan)
     setLeftTab('files')
@@ -269,26 +281,30 @@ export default function App(): React.JSX.Element {
         )}
         <div className="center-pane">
           {pdf ? (
-            <PDFViewer
-              ref={pdfRef}
-              data={pdf.data}
-              documentId={pdf.documentId}
-              scale={scale}
-              setNumPages={setNumPages}
-              layout={windowed.layout}
-              setPageRef={windowed.setPageRef}
-              getPlaceholderHeight={windowed.getPlaceholderHeight}
-              onPageRenderSuccess={windowed.onPageRenderSuccess}
-              setPageDimensions={windowed.setPageDimensions}
-              setOutline={setOutline}
-              setSearchIndex={setSearchIndex}
-              onZoomTo={zoomTo}
-              search={search}
-              searchIndexReady={searchIndex !== null}
-              annotations={annotations}
-              noteMode={noteMode}
-              setNoteMode={setNoteMode}
-            />
+            viewerReady ? (
+              <PDFViewer
+                ref={pdfRef}
+                data={pdf.data}
+                documentId={pdf.documentId}
+                scale={scale}
+                setNumPages={setNumPages}
+                layout={windowed.layout}
+                setPageRef={windowed.setPageRef}
+                getPlaceholderHeight={windowed.getPlaceholderHeight}
+                onPageRenderSuccess={windowed.onPageRenderSuccess}
+                setPageDimensions={windowed.setPageDimensions}
+                setOutline={setOutline}
+                setSearchIndex={setSearchIndex}
+                onZoomTo={zoomTo}
+                search={search}
+                searchIndexReady={searchIndex !== null}
+                annotations={annotations}
+                noteMode={noteMode}
+                setNoteMode={setNoteMode}
+              />
+            ) : (
+              <div className="pdf-viewer" />
+            )
           ) : project ? (
             <div className="empty-state empty-state--project">
               <p>Select a document from Files</p>
