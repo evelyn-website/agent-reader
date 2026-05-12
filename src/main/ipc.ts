@@ -1,5 +1,10 @@
 import { ipcMain, dialog } from 'electron'
 import { readFileSync } from 'fs'
+
+const PERF = process.env.DEBUG_PDF_PERF === '1'
+const perfLog = (msg: string): void => {
+  if (PERF) console.log(`[pdf:perf:main] ${msg}`)
+}
 import {
   recordOpen,
   listAnnotations,
@@ -9,6 +14,8 @@ import {
   recordProjectOpen,
   listRecentProjects,
   deleteProject,
+  getSearchIndex,
+  putSearchIndex,
   type CreateAnnotationInput,
   type ProjectRow,
   type UpdateAnnotationInput
@@ -27,8 +34,16 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('pdf:read', (_event, filePath: string) => {
+    const t0 = performance.now()
     const data = readFileSync(filePath)
+    const t1 = performance.now()
     const document = recordOpen({ path: filePath, data })
+    const t2 = performance.now()
+    perfLog(
+      `pdf:read readFileSync=${(t1 - t0).toFixed(1)}ms ` +
+        `recordOpen=${(t2 - t1).toFixed(1)}ms ` +
+        `total=${(t2 - t0).toFixed(1)}ms bytes=${data.length}`
+    )
     return { data, document }
   })
 
@@ -40,12 +55,9 @@ export function registerIpcHandlers(): void {
     return createAnnotation(input)
   })
 
-  ipcMain.handle(
-    'annotations:update',
-    (_event, id: string, patch: UpdateAnnotationInput) => {
-      return updateAnnotation(id, patch)
-    }
-  )
+  ipcMain.handle('annotations:update', (_event, id: string, patch: UpdateAnnotationInput) => {
+    return updateAnnotation(id, patch)
+  })
 
   ipcMain.handle('annotations:delete', (_event, id: string) => {
     deleteAnnotation(id)
@@ -63,6 +75,15 @@ export function registerIpcHandlers(): void {
     const scan = scanProjectPdfs(path)
     recordProjectOpen({ path: scan.path, name: scan.name })
     return scan
+  })
+
+  ipcMain.handle('searchIndex:get', (_event, documentId: string) => {
+    return getSearchIndex(documentId)
+  })
+
+  ipcMain.handle('searchIndex:put', (_event, documentId: string, pageTexts: string[]) => {
+    putSearchIndex(documentId, pageTexts)
+    return null
   })
 
   ipcMain.handle('project:listRecent', (): ProjectRow[] => {

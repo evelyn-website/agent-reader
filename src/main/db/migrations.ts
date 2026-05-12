@@ -55,6 +55,16 @@ const migrations: Migration[] = [
       );
       CREATE INDEX idx_projects_last_opened ON projects(last_opened_at DESC);
     `)
+  },
+  (db) => {
+    db.exec(`
+      CREATE TABLE search_indexes (
+        document_id  TEXT PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+        pages_json   TEXT NOT NULL,
+        schema_v     INTEGER NOT NULL,
+        built_at     INTEGER NOT NULL
+      );
+    `)
   }
 ]
 

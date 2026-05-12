@@ -25,6 +25,10 @@ declare global {
         scan: (path: string) => Promise<ProjectScan>
         listRecent: () => Promise<ProjectRow[]>
       }
+      searchIndex: {
+        get: (documentId: string) => Promise<string[] | null>
+        put: (documentId: string, pageTexts: string[]) => Promise<null>
+      }
     }
   }
 }

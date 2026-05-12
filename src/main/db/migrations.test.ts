@@ -22,19 +22,35 @@ describe('runMigrations', () => {
     expect(names).toContain('documents')
     expect(names).toContain('annotations')
     expect(names).toContain('projects')
+    expect(names).toContain('search_indexes')
+  })
+
+  it('cascades delete: removing a document removes its search_indexes row', () => {
+    runMigrations(db)
+    db.prepare(
+      `INSERT INTO documents (id, filename, last_path, size_bytes, first_opened_at, last_opened_at, open_count)
+       VALUES ('doc1', 'test.pdf', '/tmp/test.pdf', 100, 0, 0, 1)`
+    ).run()
+    db.prepare(
+      `INSERT INTO search_indexes (document_id, pages_json, schema_v, built_at)
+       VALUES ('doc1', '[]', 1, 0)`
+    ).run()
+    db.prepare(`DELETE FROM documents WHERE id = 'doc1'`).run()
+    const { n } = db.prepare(`SELECT count(*) as n FROM search_indexes`).get() as { n: number }
+    expect(n).toBe(0)
   })
 
   it('sets schema_version to the total migration count', () => {
     runMigrations(db)
     const row = db.prepare(`SELECT version FROM schema_version`).get() as { version: number }
-    expect(row.version).toBe(4)
+    expect(row.version).toBe(5)
   })
 
   it('is idempotent — re-running leaves version unchanged', () => {
     runMigrations(db)
     runMigrations(db)
     const row = db.prepare(`SELECT version FROM schema_version`).get() as { version: number }
-    expect(row.version).toBe(4)
+    expect(row.version).toBe(5)
   })
 
   it('projects upsert bumps open_count on conflict', () => {

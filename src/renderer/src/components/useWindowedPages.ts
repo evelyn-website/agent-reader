@@ -53,6 +53,16 @@ export function useWindowedPages(
     currentPageRef.current = currentPage
   })
 
+  useEffect(() => {
+    if (numPages !== 0) return
+    setCurrentPage(1)
+    setPinnedTarget(null)
+    pageHeights.current.clear()
+    pageRefs.current.clear()
+    scrollContainerRef.current = null
+    liveAnchorRef.current = null
+  }, [numPages])
+
   // Prefix sums of natural page heights. cumulativeNaturalH[k] = sum of
   // getNaturalH(1..k). cumulativeNaturalH[0] = 0. Length = numPages + 1.
   const cumulativeNaturalH = useMemo(() => {
