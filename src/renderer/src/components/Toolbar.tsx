@@ -49,8 +49,9 @@ export default function Toolbar({
   onDismissDocument,
   projectName
 }: ToolbarProps): React.JSX.Element {
-  const [pageInput, setPageInput] = useState(String(currentPage))
+  const [pageInputDraft, setPageInputDraft] = useState<string | null>(null)
   const [hasSelection, setHasSelection] = useState(false)
+  const pageInput = pageInputDraft ?? String(currentPage)
 
   useEffect(() => {
     if (!showAnnotationControls) return
@@ -62,10 +63,6 @@ export default function Toolbar({
     return () => document.removeEventListener('selectionchange', onSelectionChange)
   }, [showAnnotationControls])
 
-  useEffect(() => {
-    setPageInput(String(currentPage))
-  }, [currentPage])
-
   return (
     <div className="toolbar">
       {showSidebarToggle && (
@@ -75,7 +72,14 @@ export default function Toolbar({
           title="Toggle sidebar (⌘\\)"
           aria-label="Toggle sidebar"
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
             <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
             <line x1="6" y1="2.5" x2="6" y2="13.5" />
           </svg>
@@ -89,7 +93,16 @@ export default function Toolbar({
           }}
           title="Open PDF"
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M2 4.5a1 1 0 0 1 1-1h3.5l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4.5z" />
           </svg>
           Open PDF
@@ -130,7 +143,16 @@ export default function Toolbar({
             title="Add note (N)"
             aria-label="Add note"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M3 3h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H7l-3 3v-3H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
             </svg>
           </button>
@@ -150,19 +172,20 @@ export default function Toolbar({
           <input
             type="text"
             value={pageInput}
-            onChange={(e) => setPageInput(e.target.value)}
+            onChange={(e) => setPageInputDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 const n = parseInt(pageInput, 10)
                 if (Number.isFinite(n) && n >= 1 && n <= numPages) {
                   onJumpToPage(n)
+                  setPageInputDraft(null)
                   ;(e.target as HTMLInputElement).blur()
                 } else {
-                  setPageInput(String(currentPage))
+                  setPageInputDraft(null)
                 }
               }
             }}
-            onBlur={() => setPageInput(String(currentPage))}
+            onBlur={() => setPageInputDraft(null)}
           />
           <span>/ {numPages}</span>
         </div>

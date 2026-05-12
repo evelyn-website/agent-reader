@@ -1,4 +1,13 @@
-import { useState, useCallback, useMemo, useEffect, useLayoutEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+import {
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  forwardRef,
+  useImperativeHandle
+} from 'react'
 import { Page } from 'react-pdf'
 import DocumentContext from 'react-pdf/dist/esm/DocumentContext.js'
 import LinkService from 'react-pdf/dist/esm/LinkService.js'
@@ -13,11 +22,7 @@ import SearchBar from './SearchBar'
 import type { UseSearchResult } from './useSearch'
 import { createDebug } from '../lib/debug'
 import AnnotationLayer from './AnnotationLayer'
-import {
-  HIGHLIGHT_COLORS,
-  type HighlightColor,
-  type UseAnnotationsResult
-} from './useAnnotations'
+import { HIGHLIGHT_COLORS, type HighlightColor, type UseAnnotationsResult } from './useAnnotations'
 import { captureSelection, pointToPageCoord } from './captureSelection'
 
 type TextRenderer = (props: { pageNumber: number; itemIndex: number; str: string }) => string
@@ -184,24 +189,34 @@ function SwappablePage({
           />
         </div>
       )}
-      {renderOverlay && (
-        <div className="annotation-overlay-host">{renderOverlay(frontScale)}</div>
-      )}
+      {renderOverlay && <div className="annotation-overlay-host">{renderOverlay(frontScale)}</div>}
     </div>
   )
 }
 
-function renderWindow(
-  documentId: string,
-  range: { from: number; to: number },
-  scale: number,
-  setPageRef: (n: number, el: HTMLDivElement | null) => void,
-  getPlaceholderHeight: (n: number) => number,
-  onPageRenderSuccess: (n: number, height: number) => void,
-  customTextRenderer: TextRenderer | undefined,
-  renderPageOverlay: (n: number, frontScale: number) => React.ReactNode,
+interface PageWindowProps {
+  documentId: string
+  range: { from: number; to: number }
+  scale: number
+  setPageRef: (n: number, el: HTMLDivElement | null) => void
+  getPlaceholderHeight: (n: number) => number
+  onPageRenderSuccess: (n: number, height: number) => void
+  customTextRenderer: TextRenderer | undefined
+  renderPageOverlay: (n: number, frontScale: number) => React.ReactNode
   onPageMouseDown: (n: number, e: React.MouseEvent) => void | Promise<void>
-): React.JSX.Element[] {
+}
+
+function PageWindow({
+  documentId,
+  range,
+  scale,
+  setPageRef,
+  getPlaceholderHeight,
+  onPageRenderSuccess,
+  customTextRenderer,
+  renderPageOverlay,
+  onPageMouseDown
+}: PageWindowProps): React.JSX.Element {
   const out: React.JSX.Element[] = []
   for (let n = range.from; n <= range.to; n++) {
     out.push(
@@ -225,7 +240,7 @@ function renderWindow(
       </div>
     )
   }
-  return out
+  return <>{out}</>
 }
 
 const HTML_ESCAPE: Record<string, string> = {
@@ -295,25 +310,34 @@ function PDFViewerInner(
   const pdfProxy = loadedPdfProxy?.documentId === documentId ? loadedPdfProxy.pdf : null
   const switchStartRef = useRef<number | null>(null)
   const firstRenderLoggedForRef = useRef<string | null>(null)
-  const linkServiceRef = useRef(new LinkService())
+  const [linkService] = useState(() => new LinkService())
   const documentContextValue = useMemo(
     () => ({
-      linkService: linkServiceRef.current,
+      linkService,
       pdf: pdfProxy ?? undefined,
       registerPage: () => {},
       unregisterPage: () => {}
     }),
-    [pdfProxy]
+    [linkService, pdfProxy]
   )
   const containerRef = useRef<HTMLDivElement>(null)
   const scaleRef = useRef(scale)
-  scaleRef.current = scale
   const pageRefsLocal = useRef<Map<number, HTMLDivElement>>(new Map())
   const lastColorRef = useRef<HighlightColor>('yellow')
   const noteModeRef = useRef(noteMode)
-  noteModeRef.current = noteMode
 
-  const { byPage: annotationsByPage, createHighlight, createNote, updateAnnotation, deleteAnnotation } = annotations
+  useLayoutEffect(() => {
+    scaleRef.current = scale
+    noteModeRef.current = noteMode
+  }, [scale, noteMode])
+
+  const {
+    byPage: annotationsByPage,
+    createHighlight,
+    createNote,
+    updateAnnotation,
+    deleteAnnotation
+  } = annotations
 
   const loggedCommitForRef = useRef<PDFDocumentProxy | null>(null)
   useLayoutEffect(() => {
@@ -329,7 +353,9 @@ function PDFViewerInner(
   const renderedPagesRef = useRef<Set<number>>(new Set())
   const allRenderedLoggedForRef = useRef<string | null>(null)
   const expectedVisible =
-    layout.windowA.to - layout.windowA.from + 1 +
+    layout.windowA.to -
+    layout.windowA.from +
+    1 +
     (layout.windowB ? layout.windowB.to - layout.windowB.from + 1 : 0)
 
   const wrappedOnPageRenderSuccess = useCallback(
@@ -369,7 +395,7 @@ function PDFViewerInner(
   )
 
   const [openAnnotationId, setOpenAnnotationId] = useState<string | null>(null)
-  const justCreatedIdRef = useRef<string | null>(null)
+  const [justCreatedId, setJustCreatedId] = useState<string | null>(null)
 
   const triggerHighlight = useCallback(
     async (color: HighlightColor, openEditor = false): Promise<void> => {
@@ -384,7 +410,7 @@ function PDFViewerInner(
         text: cap.text
       })
       if (openEditor && ann) {
-        justCreatedIdRef.current = ann.id
+        setJustCreatedId(ann.id)
         setOpenAnnotationId(ann.id)
       }
     },
@@ -410,7 +436,7 @@ function PDFViewerInner(
       setNoteMode(false)
       const ann = await createNote({ pageNumber, x, y })
       if (ann) {
-        justCreatedIdRef.current = ann.id
+        setJustCreatedId(ann.id)
         setOpenAnnotationId(ann.id)
       }
     },
@@ -472,9 +498,7 @@ function PDFViewerInner(
       const target = e.target as HTMLElement | null
       if (
         target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.isContentEditable)
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
       ) {
         return
       }
@@ -521,9 +545,9 @@ function PDFViewerInner(
           annotations={list}
           scale={frontScale}
           openId={openAnnotationId}
-          openIsNew={justCreatedIdRef.current === openAnnotationId && openAnnotationId !== null}
+          openIsNew={justCreatedId === openAnnotationId && openAnnotationId !== null}
           onOpenChange={(id) => {
-            justCreatedIdRef.current = null
+            setJustCreatedId(null)
             setOpenAnnotationId(id)
           }}
           onUpdate={updateAnnotation}
@@ -531,7 +555,7 @@ function PDFViewerInner(
         />
       )
     },
-    [annotationsByPage, openAnnotationId, updateAnnotation, deleteAnnotation]
+    [annotationsByPage, openAnnotationId, justCreatedId, updateAnnotation, deleteAnnotation]
   )
 
   useEffect(() => {
@@ -553,11 +577,13 @@ function PDFViewerInner(
       }
       const tProxy = performance.now()
       if (cancelled) return
-      linkServiceRef.current.setDocument(pdf)
+      linkService.setDocument(pdf)
       setLoadedPdfProxy({ documentId, pdf })
       setNumPages(pdf.numPages)
       const tSet = performance.now()
-      dPerf(`  ${id} proxy-ready ${(tProxy - tStart).toFixed(1)}ms; setState ${(tSet - tProxy).toFixed(1)}ms`)
+      dPerf(
+        `  ${id} proxy-ready ${(tProxy - tStart).toFixed(1)}ms; setState ${(tSet - tProxy).toFixed(1)}ms`
+      )
 
       const cachedMeta = getMeta(documentId)
       if (cachedMeta) {
@@ -576,7 +602,9 @@ function PDFViewerInner(
         })
         setPageDimensions(dims)
         const tDims = performance.now()
-        dPerf(`  ${id} getPage×${pdf.numPages} ${(tPages - tSet).toFixed(1)}ms; dims ${(tDims - tPages).toFixed(1)}ms`)
+        dPerf(
+          `  ${id} getPage×${pdf.numPages} ${(tPages - tSet).toFixed(1)}ms; dims ${(tDims - tPages).toFixed(1)}ms`
+        )
         const outline = await loadToc(pdf as unknown as Parameters<typeof loadToc>[0])
         const tOutline = performance.now()
         if (cancelled) return
@@ -616,7 +644,7 @@ function PDFViewerInner(
       // switching docs later (sec+). Only the former matters for latency.
       if (dt < 100) dPerf(`switch cleanup ${id} after ${dt.toFixed(1)}ms (likely StrictMode)`)
     }
-  }, [documentId, data, setNumPages, setPageDimensions, setOutline, setSearchIndex])
+  }, [documentId, data, linkService, setNumPages, setPageDimensions, setOutline, setSearchIndex])
 
   return (
     <div className={`pdf-viewer${noteMode ? ' pdf-viewer--note-mode' : ''}`}>
@@ -628,32 +656,33 @@ function PDFViewerInner(
               {layout.topSpacer > 0 && (
                 <div className="pdf-spacer" style={{ height: layout.topSpacer }} />
               )}
-              {renderWindow(
-                documentId,
-                layout.windowA,
-                scale,
-                setPageRefCombined,
-                getPlaceholderHeight,
-                wrappedOnPageRenderSuccess,
-                customTextRenderer,
-                renderPageOverlay,
-                handlePageMouseDown
-              )}
+              <PageWindow
+                documentId={documentId}
+                range={layout.windowA}
+                scale={scale}
+                setPageRef={setPageRefCombined}
+                getPlaceholderHeight={getPlaceholderHeight}
+                onPageRenderSuccess={wrappedOnPageRenderSuccess}
+                customTextRenderer={customTextRenderer}
+                renderPageOverlay={renderPageOverlay}
+                onPageMouseDown={handlePageMouseDown}
+              />
               {layout.middleSpacer > 0 && (
                 <div className="pdf-spacer" style={{ height: layout.middleSpacer }} />
               )}
-              {layout.windowB &&
-                renderWindow(
-                  documentId,
-                  layout.windowB,
-                  scale,
-                  setPageRefCombined,
-                  getPlaceholderHeight,
-                  onPageRenderSuccess,
-                  customTextRenderer,
-                  renderPageOverlay,
-                  handlePageMouseDown
-                )}
+              {layout.windowB && (
+                <PageWindow
+                  documentId={documentId}
+                  range={layout.windowB}
+                  scale={scale}
+                  setPageRef={setPageRefCombined}
+                  getPlaceholderHeight={getPlaceholderHeight}
+                  onPageRenderSuccess={onPageRenderSuccess}
+                  customTextRenderer={customTextRenderer}
+                  renderPageOverlay={renderPageOverlay}
+                  onPageMouseDown={handlePageMouseDown}
+                />
+              )}
               {layout.bottomSpacer > 0 && (
                 <div className="pdf-spacer" style={{ height: layout.bottomSpacer }} />
               )}

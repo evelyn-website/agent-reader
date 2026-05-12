@@ -5,7 +5,7 @@ import type {
 } from '../../../main/db'
 import type { ProjectScan } from '../../../main/project'
 import { FolderIcon, NoteIcon, PageIcon } from './icons'
-import { formatRelativeTime } from './MarksTabContent'
+import { formatRelativeTime } from './marksTabUtils'
 
 interface Props {
   project: ProjectScan
@@ -117,12 +117,16 @@ export default function ProjectDashboard({
                   )}
                 </span>
                 <span className="project-mark-row__body">
-                  <span className="project-mark-row__text">{mark.text_excerpt || mark.comment || '(empty note)'}</span>
+                  <span className="project-mark-row__text">
+                    {mark.text_excerpt || mark.comment || '(empty note)'}
+                  </span>
                   <span className="project-mark-row__meta">
                     {mark.document_name} · p.{mark.page_number}
                   </span>
                 </span>
-                <span className="project-mark-row__time">{formatRelativeTime(mark.updated_at)}</span>
+                <span className="project-mark-row__time">
+                  {formatRelativeTime(mark.updated_at)}
+                </span>
               </button>
             ))}
           </div>
@@ -136,17 +140,24 @@ export default function ProjectDashboard({
   )
 }
 
-function formatMarkCount(doc: Pick<ProjectDocumentSummary, 'highlight_count' | 'note_count' | 'mark_count'>): string {
+function formatMarkCount(
+  doc: Pick<ProjectDocumentSummary, 'highlight_count' | 'note_count' | 'mark_count'>
+): string {
   const parts: string[] = []
-  if (doc.highlight_count) parts.push(`${doc.highlight_count} highlight${doc.highlight_count === 1 ? '' : 's'}`)
+  if (doc.highlight_count)
+    parts.push(`${doc.highlight_count} highlight${doc.highlight_count === 1 ? '' : 's'}`)
   if (doc.note_count) parts.push(`${doc.note_count} note${doc.note_count === 1 ? '' : 's'}`)
-  return parts.length > 0 ? parts.join(', ') : `${doc.mark_count} mark${doc.mark_count === 1 ? '' : 's'}`
+  return parts.length > 0
+    ? parts.join(', ')
+    : `${doc.mark_count} mark${doc.mark_count === 1 ? '' : 's'}`
 }
 
 function formatOpenedTime(ts: number): string {
   const relative = formatRelativeTime(ts)
   if (relative === 'now') return 'Opened now'
-  return relative === 'Yesterday' || relative.includes(' ') ? `Opened ${relative}` : `Opened ${relative} ago`
+  return relative === 'Yesterday' || relative.includes(' ')
+    ? `Opened ${relative}`
+    : `Opened ${relative} ago`
 }
 
 function flattenProjectDocs(project: ProjectScan): ProjectDocumentSummary[] {

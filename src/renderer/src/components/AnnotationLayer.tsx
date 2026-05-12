@@ -25,7 +25,7 @@ export default function AnnotationLayer({
 }: AnnotationLayerProps): React.JSX.Element | null {
   if (annotations.length === 0) return null
 
-  const open = openId ? annotations.find((a) => a.id === openId) ?? null : null
+  const open = openId ? (annotations.find((a) => a.id === openId) ?? null) : null
 
   const handleOpenChange = (id: string | null): void => {
     if (id === null && document.activeElement instanceof HTMLElement) {
@@ -84,11 +84,9 @@ export default function AnnotationLayer({
         return null
       })}
       {open && (
-        <div
-          className="annotation-popover-anchor"
-          style={popoverPosition(open, scale)}
-        >
+        <div className="annotation-popover-anchor" style={popoverPosition(open, scale)}>
           <CommentPopover
+            key={open.id}
             annotation={open}
             isNew={openIsNew}
             onUpdate={(patch) => onUpdate(open.id, patch)}

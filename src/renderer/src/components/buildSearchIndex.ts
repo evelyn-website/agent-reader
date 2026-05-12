@@ -20,10 +20,7 @@ export interface SearchIndex {
 
 const BATCH_SIZE = 8
 
-export async function buildSearchIndex(
-  pdf: PdfLike,
-  signal?: AbortSignal
-): Promise<SearchIndex> {
+export async function buildSearchIndex(pdf: PdfLike, signal?: AbortSignal): Promise<SearchIndex> {
   const n = pdf.numPages
   const pageTexts: string[] = new Array(n + 1).fill('')
   const pageTextsLower: string[] = new Array(n + 1).fill('')
@@ -36,7 +33,11 @@ export async function buildSearchIndex(
     )
     const contents = await Promise.all(pages.map((p) => p.getTextContent()))
     for (let i = 0; i < contents.length; i++) {
-      const text = contents[i].items.map((it) => it.str).join(' ').replace(/\s+/g, ' ').trim()
+      const text = contents[i].items
+        .map((it) => it.str)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim()
       const idx = start + i
       pageTexts[idx] = text
       pageTextsLower[idx] = text.toLowerCase()

@@ -89,8 +89,12 @@ describe('useSearch — navigation', () => {
     await act(async () => {
       result.current.setQuery('x')
     })
-    await act(async () => { result.current.next() })
-    await act(async () => { result.current.next() })
+    await act(async () => {
+      result.current.next()
+    })
+    await act(async () => {
+      result.current.next()
+    })
     expect(result.current.currentMatchIndex).toBe(0)
   })
 

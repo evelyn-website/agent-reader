@@ -196,7 +196,11 @@ describe('project dashboard', () => {
     createAnnotation({ document_id: newer.id, page_number: 3, kind: 'note', comment: 'note' })
     createAnnotation({ document_id: older.id, page_number: 1, kind: 'highlight', color: 'blue' })
 
-    const dashboard = getProjectDashboard(['/project/a.pdf', '/project/unread.pdf', '/project/b.pdf'])
+    const dashboard = getProjectDashboard([
+      '/project/a.pdf',
+      '/project/unread.pdf',
+      '/project/b.pdf'
+    ])
 
     expect(dashboard.documents.map((d) => d.path)).toEqual([
       '/project/b.pdf',

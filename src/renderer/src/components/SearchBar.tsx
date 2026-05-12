@@ -6,7 +6,10 @@ interface SearchBarProps {
   indexReady: boolean
 }
 
-export default function SearchBar({ search, indexReady }: SearchBarProps): React.JSX.Element | null {
+export default function SearchBar({
+  search,
+  indexReady
+}: SearchBarProps): React.JSX.Element | null {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {

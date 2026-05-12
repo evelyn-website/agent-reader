@@ -59,9 +59,7 @@ export default function OutlineTabContent({
       setStickyClick({ path, pageNumber, locked: true })
       if (stickyTimer.current) clearTimeout(stickyTimer.current)
       stickyTimer.current = setTimeout(() => {
-        setStickyClick((prev) =>
-          prev && prev.path === path ? { ...prev, locked: false } : prev
-        )
+        setStickyClick((prev) => (prev && prev.path === path ? { ...prev, locked: false } : prev))
       }, 1000)
       onJumpToPage(pageNumber)
     },

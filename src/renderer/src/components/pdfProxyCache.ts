@@ -29,7 +29,9 @@ export async function getOrLoad(documentId: string, data: Buffer): Promise<PDFDo
   if (hit) {
     cache.delete(documentId)
     cache.set(documentId, hit)
-    dPerf(`cache HIT  ${documentId.slice(0, 8)} ${(performance.now() - t0).toFixed(1)}ms (size=${cache.size})`)
+    dPerf(
+      `cache HIT  ${documentId.slice(0, 8)} ${(performance.now() - t0).toFixed(1)}ms (size=${cache.size})`
+    )
     return hit
   }
   const pending = inflight.get(documentId)

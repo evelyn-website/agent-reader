@@ -37,7 +37,9 @@ describe('captureSelection', () => {
   function makePageEl(left: number, top: number, right: number, bottom: number): HTMLElement {
     const el = document.createElement('div')
     document.body.appendChild(el)
-    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(makeBoundingRect(left, top, right, bottom))
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(
+      makeBoundingRect(left, top, right, bottom)
+    )
     return el
   }
 

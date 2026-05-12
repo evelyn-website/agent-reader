@@ -184,11 +184,14 @@ async function extractLinksFromPage(pdf: PdfLike, pageNum: number): Promise<Page
         return null
       }
       if (/^\d+$/.test(title)) {
-        log(`page ${pageNum}: dropped group key=${key} target=${target} (numeric-only title "${title}")`)
+        log(
+          `page ${pageNum}: dropped group key=${key} target=${target} (numeric-only title "${title}")`
+        )
         return null
       }
       const textXs = parts.map((p) => p.textLeftX).filter((x): x is number => x !== null)
-      const rawLeft = textXs.length > 0 ? Math.min(...textXs) : Math.min(...group.map((l) => l.rect[0]))
+      const rawLeft =
+        textXs.length > 0 ? Math.min(...textXs) : Math.min(...group.map((l) => l.rect[0]))
       const leftX = Math.round(rawLeft / 2) * 2
       return { title, pageNumber: target, leftX }
     })

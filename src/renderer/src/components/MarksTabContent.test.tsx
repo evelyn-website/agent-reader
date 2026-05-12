@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import MarksTabContent, { formatRelativeTime, emptyMessage } from './MarksTabContent'
+import MarksTabContent from './MarksTabContent'
+import { formatRelativeTime, emptyMessage } from './marksTabUtils'
 import type { Annotation, UseAnnotationsResult } from './useAnnotations'
 import type { ProjectMarkSummary } from '../../../main/db'
 
@@ -204,9 +205,7 @@ describe('MarksTabContent', () => {
       ...makeAnnotationsResult([ann]),
       deleteAnnotation
     }
-    render(
-      <MarksTabContent annotations={annotations} onJumpToPage={vi.fn()} hasDocument={true} />
-    )
+    render(<MarksTabContent annotations={annotations} onJumpToPage={vi.fn()} hasDocument={true} />)
     fireEvent.click(screen.getByLabelText('Delete mark'))
     expect(deleteAnnotation).toHaveBeenCalledWith('ann-1')
   })

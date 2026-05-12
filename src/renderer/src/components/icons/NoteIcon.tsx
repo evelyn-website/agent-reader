@@ -11,17 +11,8 @@ export default function NoteIcon({ size = 12 }: Props): React.JSX.Element {
         strokeWidth="1.4"
         strokeLinejoin="round"
       />
-      <path
-        d="M5.5 5.5h5M5.5 8h4"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M13 10l-3 3v-2.5A.5.5 0 0 1 10.5 10H13Z"
-        fill="currentColor"
-        fillOpacity="0.2"
-      />
+      <path d="M5.5 5.5h5M5.5 8h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M13 10l-3 3v-2.5A.5.5 0 0 1 10.5 10H13Z" fill="currentColor" fillOpacity="0.2" />
     </svg>
   )
 }

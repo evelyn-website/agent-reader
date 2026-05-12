@@ -28,9 +28,15 @@ function createWindow(): void {
   })
 
   mainWindow.on('focus', () => {
-    globalShortcut.register('CommandOrControl+=', () => mainWindow.webContents.send('zoom', 'Equal'))
-    globalShortcut.register('CommandOrControl+-', () => mainWindow.webContents.send('zoom', 'Minus'))
-    globalShortcut.register('CommandOrControl+0', () => mainWindow.webContents.send('zoom', 'Digit0'))
+    globalShortcut.register('CommandOrControl+=', () =>
+      mainWindow.webContents.send('zoom', 'Equal')
+    )
+    globalShortcut.register('CommandOrControl+-', () =>
+      mainWindow.webContents.send('zoom', 'Minus')
+    )
+    globalShortcut.register('CommandOrControl+0', () =>
+      mainWindow.webContents.send('zoom', 'Digit0')
+    )
   })
 
   mainWindow.on('blur', () => {

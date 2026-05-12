@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
-import { useAnnotations } from './useAnnotations'
+import { useAnnotations, type AnnotationKind } from './useAnnotations'
 import type { UnscaledRect } from './captureSelection'
 
-function makeRow(overrides: Partial<{
+interface AnnotationRowFixture {
   id: string
   document_id: string
   page_number: number
-  kind: 'highlight' | 'note'
+  kind: AnnotationKind
   color: string | null
   rects_json: string | null
   anchor_x: number | null
@@ -16,7 +16,9 @@ function makeRow(overrides: Partial<{
   comment: string | null
   created_at: number
   updated_at: number
-}> = {}) {
+}
+
+function makeRow(overrides: Partial<AnnotationRowFixture> = {}): AnnotationRowFixture {
   return {
     id: 'ann-1',
     document_id: 'doc-1',
@@ -74,11 +76,13 @@ describe('useAnnotations — loading', () => {
   })
 
   it('groups annotations by page in byPage', async () => {
-    window.api.annotations.list = vi.fn().mockResolvedValue([
-      makeRow({ id: 'a1', page_number: 3 }),
-      makeRow({ id: 'a2', page_number: 1 }),
-      makeRow({ id: 'a3', page_number: 3 })
-    ])
+    window.api.annotations.list = vi
+      .fn()
+      .mockResolvedValue([
+        makeRow({ id: 'a1', page_number: 3 }),
+        makeRow({ id: 'a2', page_number: 1 }),
+        makeRow({ id: 'a3', page_number: 3 })
+      ])
     const { result } = renderHook(() => useAnnotations('doc-1'))
     await waitFor(() => expect(result.current.all).toHaveLength(3))
     expect(result.current.byPage.get(1)).toHaveLength(1)

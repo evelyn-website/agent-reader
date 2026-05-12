@@ -47,7 +47,9 @@ vi.mock('react-pdf/dist/esm/DocumentContext.js', async () => {
 
 vi.mock('react-pdf/dist/esm/LinkService.js', () => ({
   default: class LinkService {
-    setDocument(): void {}
+    setDocument(): void {
+      void undefined
+    }
   }
 }))
 
@@ -87,7 +89,10 @@ function deferred<T>(): {
   return { promise, resolve, reject }
 }
 
-function makePdf(numPages: number) {
+function makePdf(numPages: number): {
+  numPages: number
+  getPage: ReturnType<typeof vi.fn>
+} {
   return {
     numPages,
     getPage: vi.fn().mockResolvedValue({
@@ -127,7 +132,9 @@ function makeAnnotations(): UseAnnotationsResult {
   }
 }
 
-function makeProps(overrides: Partial<ComponentProps<typeof PDFViewer>> = {}): ComponentProps<typeof PDFViewer> {
+function makeProps(
+  overrides: Partial<ComponentProps<typeof PDFViewer>> = {}
+): ComponentProps<typeof PDFViewer> {
   return {
     data: Buffer.from('pdf bytes'),
     documentId: 'doc-a',

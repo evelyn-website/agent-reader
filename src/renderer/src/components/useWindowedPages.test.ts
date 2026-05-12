@@ -4,10 +4,9 @@ import { useWindowedPages } from './useWindowedPages'
 
 describe('useWindowedPages — document reset', () => {
   it('clears cached page state when numPages drops to zero', async () => {
-    const { result, rerender } = renderHook(
-      ({ numPages }) => useWindowedPages(numPages, 1),
-      { initialProps: { numPages: 20 } }
-    )
+    const { result, rerender } = renderHook(({ numPages }) => useWindowedPages(numPages, 1), {
+      initialProps: { numPages: 20 }
+    })
 
     act(() => {
       result.current.onPageRenderSuccess(1, 1234)

@@ -4,13 +4,7 @@ import type { UnscaledRect } from './captureSelection'
 export type AnnotationKind = 'highlight' | 'note'
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink' | 'orange'
 
-export const HIGHLIGHT_COLORS: HighlightColor[] = [
-  'yellow',
-  'green',
-  'blue',
-  'pink',
-  'orange'
-]
+export const HIGHLIGHT_COLORS: HighlightColor[] = ['yellow', 'green', 'blue', 'pink', 'orange']
 
 export interface Annotation {
   id: string
@@ -50,9 +44,7 @@ function rowToAnnotation(row: AnnotationRow): Annotation {
     color: (row.color as HighlightColor | null) ?? null,
     rects: row.rects_json ? (JSON.parse(row.rects_json) as UnscaledRect[]) : null,
     anchor:
-      row.anchor_x !== null && row.anchor_y !== null
-        ? { x: row.anchor_x, y: row.anchor_y }
-        : null,
+      row.anchor_x !== null && row.anchor_y !== null ? { x: row.anchor_x, y: row.anchor_y } : null,
     textExcerpt: row.text_excerpt,
     comment: row.comment,
     createdAt: row.created_at,
@@ -174,5 +166,12 @@ export function useAnnotations(documentId: string | null): UseAnnotationsResult 
     setAnnotations((prev) => prev.filter((a) => a.id !== id))
   }, [])
 
-  return { byPage, all: annotations, createHighlight, createNote, updateAnnotation, deleteAnnotation }
+  return {
+    byPage,
+    all: annotations,
+    createHighlight,
+    createNote,
+    updateAnnotation,
+    deleteAnnotation
+  }
 }

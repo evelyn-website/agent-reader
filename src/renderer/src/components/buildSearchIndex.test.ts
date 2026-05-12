@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { buildSearchIndex } from './buildSearchIndex'
 
-function makePdf(pageTexts: string[]) {
+interface PdfFixture {
+  numPages: number
+  getPage: (n: number) => Promise<{
+    getTextContent: () => Promise<{ items: Array<{ str: string }> }>
+  }>
+}
+
+function makePdf(pageTexts: string[]): PdfFixture {
   return {
     numPages: pageTexts.length,
     getPage: async (n: number) => ({
@@ -37,7 +44,7 @@ describe('buildSearchIndex', () => {
   it('collapses whitespace and trims', async () => {
     const pdf = {
       numPages: 1,
-      getPage: async (_n: number) => ({
+      getPage: async () => ({
         getTextContent: async () => ({
           items: [{ str: '  hello  ' }, { str: '  world  ' }]
         })
@@ -50,7 +57,7 @@ describe('buildSearchIndex', () => {
   it('handles an empty page (no items)', async () => {
     const pdf = {
       numPages: 1,
-      getPage: async (_n: number) => ({
+      getPage: async () => ({
         getTextContent: async () => ({ items: [] })
       })
     }

@@ -4,15 +4,15 @@ import { resolve } from 'path'
 
 export default defineConfig({
   test: {
+    // ELECTRON_RUN_AS_NODE isn't propagated to fork()'d children by Electron,
+    // so re-inject it here so worker processes also run as Node.
+    env: {
+      ELECTRON_RUN_AS_NODE: '1'
+    },
     pool: 'forks',
     poolOptions: {
       forks: {
-        execArgv: [],
-        // ELECTRON_RUN_AS_NODE isn't propagated to fork()'d children by Electron,
-        // so re-inject it here so worker processes also run as Node.
-        env: {
-          ELECTRON_RUN_AS_NODE: '1'
-        }
+        execArgv: []
       }
     },
     projects: [

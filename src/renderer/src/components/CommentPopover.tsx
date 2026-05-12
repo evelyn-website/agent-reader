@@ -44,11 +44,6 @@ export default function CommentPopover({
   const taRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    setText(annotation.comment ?? '')
-    setMode(initialMode(annotation, isNew))
-  }, [annotation.id])
-
-  useEffect(() => {
     if (mode === 'edit') {
       taRef.current?.focus()
       const ta = taRef.current
@@ -102,9 +97,7 @@ export default function CommentPopover({
         <span className="annotation-popover__kind">
           {annotation.kind === 'highlight' ? 'HIGHLIGHT' : 'NOTE'}
         </span>
-        <span className="annotation-popover__time">
-          {formatRelativeTime(annotation.updatedAt)}
-        </span>
+        <span className="annotation-popover__time">{formatRelativeTime(annotation.updatedAt)}</span>
       </div>
       {annotation.kind === 'highlight' && (
         <div className="annotation-popover__colors">
@@ -168,10 +161,7 @@ export default function CommentPopover({
             <kbd className="annotation-popover__kbd">⌘↵</kbd>
           </button>
         ) : (
-          <button
-            className="annotation-popover__edit"
-            onClick={() => setMode('edit')}
-          >
+          <button className="annotation-popover__edit" onClick={() => setMode('edit')}>
             Edit
           </button>
         )}

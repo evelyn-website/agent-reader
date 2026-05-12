@@ -56,8 +56,6 @@ export function useWindowedPages(
 
   useEffect(() => {
     if (numPages !== 0) return
-    setCurrentPage(1)
-    setPinnedTarget(null)
     pageHeights.current.clear()
     pageRefs.current.clear()
     scrollContainerRef.current = null
@@ -133,7 +131,8 @@ export function useWindowedPages(
     let bestDistance = Infinity
     for (const [n, el] of pageRefs.current) {
       const r = el.getBoundingClientRect()
-      const visibleHeight = Math.min(r.bottom, containerRect.bottom) - Math.max(r.top, containerRect.top)
+      const visibleHeight =
+        Math.min(r.bottom, containerRect.bottom) - Math.max(r.top, containerRect.top)
       if (visibleHeight / viewportHeight > DOMINANT_PAGE_VIEWPORT_THRESHOLD) return n
     }
     for (const [n, el] of pageRefs.current) {
@@ -228,8 +227,8 @@ export function useWindowedPages(
         bottomSpacer: 0
       }
     }
-    const a = currentPage
-    const b = pinnedTarget
+    const a = numPages === 0 ? 1 : currentPage
+    const b = numPages === 0 ? null : pinnedTarget
     const clamp = (x: number): number => Math.max(1, Math.min(numPages, x))
     const aFrom = clamp(a - WINDOW_SIZE)
     const aTo = clamp(a + WINDOW_SIZE)
@@ -343,7 +342,7 @@ export function useWindowedPages(
   }, [pinnedTarget])
 
   return {
-    currentPage,
+    currentPage: numPages === 0 ? 1 : currentPage,
     layout,
     setPageRef,
     getPlaceholderHeight,

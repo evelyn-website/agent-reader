@@ -42,5 +42,13 @@ export function useZoom(): {
     }
   }, [zoomIn, zoomOut, zoomReset])
 
-  return { scale, zoomIn, zoomOut, zoomReset, zoomTo, atMin: scale <= MIN_SCALE, atMax: scale >= MAX_SCALE }
+  return {
+    scale,
+    zoomIn,
+    zoomOut,
+    zoomReset,
+    zoomTo,
+    atMin: scale <= MIN_SCALE,
+    atMax: scale >= MAX_SCALE
+  }
 }
