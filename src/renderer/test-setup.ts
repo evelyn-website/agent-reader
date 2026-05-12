@@ -11,6 +11,15 @@ beforeEach(() => {
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn()
+    },
+    project: {
+      open: vi.fn(),
+      scan: vi.fn(),
+      listRecent: vi.fn().mockResolvedValue([])
+    },
+    searchIndex: {
+      get: vi.fn().mockResolvedValue(null),
+      put: vi.fn().mockResolvedValue(null)
     }
   }
 })
