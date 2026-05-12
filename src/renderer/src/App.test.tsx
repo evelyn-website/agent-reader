@@ -12,23 +12,26 @@ const appMocks = vi.hoisted(() => ({
 
 vi.mock('./components/PDFViewer', async () => {
   const React = await import('react')
-  return {
-    default: React.forwardRef(
-      (
-        props: {
-          documentId: string
-          setNumPages: (n: number) => void
-        },
-        ref
-      ) => {
-        React.useImperativeHandle(ref, () => ({ triggerHighlight: () => {} }))
-        React.useEffect(() => {
-          props.setNumPages(props.documentId === 'doc-1' ? 12 : 3)
-        }, [props])
+  const MockPDFViewer = React.forwardRef(
+    (
+      props: {
+        documentId: string
+        setNumPages: (n: number) => void
+      },
+      ref
+    ) => {
+      React.useImperativeHandle(ref, () => ({ triggerHighlight: () => {} }))
+      React.useEffect(() => {
+        props.setNumPages(props.documentId === 'doc-1' ? 12 : 3)
+      }, [props])
 
-        return React.createElement('div', { 'data-testid': 'pdf-viewer' }, props.documentId)
-      }
-    )
+      return React.createElement('div', { 'data-testid': 'pdf-viewer' }, props.documentId)
+    }
+  )
+  MockPDFViewer.displayName = 'MockPDFViewer'
+
+  return {
+    default: MockPDFViewer
   }
 })
 
@@ -82,11 +85,7 @@ vi.mock('./components/OutlineTabContent', () => ({
 }))
 
 vi.mock('./components/FilesTabContent', () => ({
-  default: ({
-    onOpenFile
-  }: {
-    onOpenFile: (path: string) => void | Promise<void>
-  }) => (
+  default: ({ onOpenFile }: { onOpenFile: (path: string) => void | Promise<void> }) => (
     <div>
       <button type="button" onClick={() => void onOpenFile('/project/one.pdf')}>
         Open one from files tab
@@ -107,11 +106,7 @@ vi.mock('./components/MarksTabContent', () => ({
 }))
 
 vi.mock('./components/EmptyLauncher', () => ({
-  default: ({
-    onOpenRecent
-  }: {
-    onOpenRecent: (path: string) => void | Promise<void>
-  }) => (
+  default: ({ onOpenRecent }: { onOpenRecent: (path: string) => void | Promise<void> }) => (
     <div data-testid="empty-launcher">
       <button type="button" onClick={() => void onOpenRecent('/project')}>
         Open recent project
