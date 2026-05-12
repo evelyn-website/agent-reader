@@ -1,11 +1,14 @@
-import { useState, useCallback, useMemo, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
-import { Document, Page } from 'react-pdf'
+import { useState, useCallback, useMemo, useEffect, useLayoutEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+import { Page } from 'react-pdf'
+import DocumentContext from 'react-pdf/dist/esm/DocumentContext.js'
+import LinkService from 'react-pdf/dist/esm/LinkService.js'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 import { loadToc, type OutlineNode } from './loadToc'
 import type { Layout } from './useWindowedPages'
 import type { SearchIndex } from './buildSearchIndex'
 import { buildSearchIndex } from './buildSearchIndex'
+import { getOrLoad, getMeta, setMeta, type PDFDocumentProxy } from './pdfProxyCache'
 import SearchBar from './SearchBar'
 import type { UseSearchResult } from './useSearch'
 import { createDebug } from '../lib/debug'
@@ -20,16 +23,17 @@ import { captureSelection, pointToPageCoord } from './captureSelection'
 type TextRenderer = (props: { pageNumber: number; itemIndex: number; str: string }) => string
 
 const dSwap = createDebug('pdf:swap')
+const dPerf = createDebug('pdf:perf')
 
 interface PDFViewerProps {
-  data: Uint8Array
+  data: Buffer
+  documentId: string
   scale: number
   setNumPages: (n: number) => void
   layout: Layout
   setPageRef: (n: number, el: HTMLDivElement | null) => void
   getPlaceholderHeight: (n: number) => number
   onPageRenderSuccess: (n: number, height: number) => void
-  onItemClick: (pageNumber: number) => void
   setPageDimensions: (dims: Map<number, number>) => void
   setOutline: (outline: OutlineNode[]) => void
   setSearchIndex: (index: SearchIndex | null) => void
@@ -53,6 +57,7 @@ const HIDDEN_STYLE: React.CSSProperties = {
 }
 
 interface SwappablePageProps {
+  pdf: PDFDocumentProxy
   pageNumber: number
   scale: number
   onRendered: (height: number) => void
@@ -68,6 +73,7 @@ const BACK_SLOT_TEARDOWN_MS = 500
 const BACK_RENDER_DEBOUNCE_MS = 120
 
 function SwappablePage({
+  pdf,
   pageNumber,
   scale,
   onRendered,
@@ -156,6 +162,7 @@ function SwappablePage({
         <div ref={slotARef} style={front === 'a' ? undefined : HIDDEN_STYLE}>
           <Page
             key={`a-${slots.a}`}
+            pdf={pdf}
             pageNumber={pageNumber}
             scale={slots.a}
             renderTextLayer={true}
@@ -169,6 +176,7 @@ function SwappablePage({
         <div ref={slotBRef} style={front === 'b' ? undefined : HIDDEN_STYLE}>
           <Page
             key={`b-${slots.b}`}
+            pdf={pdf}
             pageNumber={pageNumber}
             scale={slots.b}
             renderTextLayer={true}
@@ -186,6 +194,7 @@ function SwappablePage({
 }
 
 function renderWindow(
+  pdf: PDFDocumentProxy,
   range: { from: number; to: number },
   scale: number,
   setPageRef: (n: number, el: HTMLDivElement | null) => void,
@@ -207,6 +216,7 @@ function renderWindow(
         onMouseDown={(e) => void onPageMouseDown(n, e)}
       >
         <SwappablePage
+          pdf={pdf}
           pageNumber={n}
           scale={scale}
           onRendered={(height) => onPageRenderSuccess(n, height)}
@@ -258,13 +268,13 @@ function buildTextRenderer(regex: RegExp | null): TextRenderer | undefined {
 function PDFViewerInner(
   {
     data,
+    documentId,
     scale,
     setNumPages,
     layout,
     setPageRef,
     getPlaceholderHeight,
     onPageRenderSuccess,
-    onItemClick,
     setPageDimensions,
     setOutline,
     setSearchIndex,
@@ -277,7 +287,19 @@ function PDFViewerInner(
   }: PDFViewerProps,
   ref: React.Ref<PDFViewerHandle>
 ): React.JSX.Element {
-  const file = useMemo(() => ({ data: new Uint8Array(data) }), [data])
+  const [pdfProxy, setPdfProxy] = useState<PDFDocumentProxy | null>(null)
+  const switchStartRef = useRef<number | null>(null)
+  const firstRenderLoggedForRef = useRef<string | null>(null)
+  const linkServiceRef = useRef(new LinkService())
+  const documentContextValue = useMemo(
+    () => ({
+      linkService: linkServiceRef.current,
+      pdf: pdfProxy ?? undefined,
+      registerPage: () => {},
+      unregisterPage: () => {}
+    }),
+    [pdfProxy]
+  )
   const containerRef = useRef<HTMLDivElement>(null)
   const scaleRef = useRef(scale)
   scaleRef.current = scale
@@ -287,6 +309,50 @@ function PDFViewerInner(
   noteModeRef.current = noteMode
 
   const { byPage: annotationsByPage, createHighlight, createNote, updateAnnotation, deleteAnnotation } = annotations
+
+  const loggedCommitForRef = useRef<PDFDocumentProxy | null>(null)
+  useLayoutEffect(() => {
+    if (!pdfProxy) return
+    if (loggedCommitForRef.current === pdfProxy) return
+    loggedCommitForRef.current = pdfProxy
+    const start = switchStartRef.current
+    if (start == null) return
+    const id = documentId.slice(0, 8)
+    dPerf(`  ${id} commit (post-setPdfProxy) ${(performance.now() - start).toFixed(1)}ms`)
+  }, [pdfProxy, documentId])
+
+  const renderedPagesRef = useRef<Set<number>>(new Set())
+  const allRenderedLoggedForRef = useRef<string | null>(null)
+  const expectedVisible =
+    layout.windowA.to - layout.windowA.from + 1 +
+    (layout.windowB ? layout.windowB.to - layout.windowB.from + 1 : 0)
+
+  const wrappedOnPageRenderSuccess = useCallback(
+    (n: number, height: number): void => {
+      const start = switchStartRef.current
+      if (start != null && firstRenderLoggedForRef.current !== documentId) {
+        firstRenderLoggedForRef.current = documentId
+        dPerf(
+          `  ${documentId.slice(0, 8)} first-page-rendered p${n} ` +
+            `${(performance.now() - start).toFixed(1)}ms (since switch START)`
+        )
+      }
+      renderedPagesRef.current.add(n)
+      if (
+        start != null &&
+        allRenderedLoggedForRef.current !== documentId &&
+        renderedPagesRef.current.size >= expectedVisible
+      ) {
+        allRenderedLoggedForRef.current = documentId
+        dPerf(
+          `  ${documentId.slice(0, 8)} all-${expectedVisible}-visible-rendered ` +
+            `${(performance.now() - start).toFixed(1)}ms (since switch START)`
+        )
+      }
+      onPageRenderSuccess(n, height)
+    },
+    [documentId, onPageRenderSuccess, expectedVisible]
+  )
 
   const setPageRefCombined = useCallback(
     (n: number, el: HTMLDivElement | null) => {
@@ -463,71 +529,131 @@ function PDFViewerInner(
     [annotationsByPage, openAnnotationId, updateAnnotation, deleteAnnotation]
   )
 
-  const onDocumentLoadSuccess = useCallback(
-    async (pdf: {
-      numPages: number
-      getPage: (n: number) => Promise<{ getViewport: (p: { scale: number }) => { height: number } }>
-    }) => {
-      const dims = new Map<number, number>()
-      const pages = await Promise.all(
-        Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1))
-      )
-      pages.forEach((page, i) => {
-        dims.set(i + 1, page.getViewport({ scale: 1 }).height)
-      })
-      setPageDimensions(dims)
+  useEffect(() => {
+    const id = documentId.slice(0, 8)
+    const tStart = performance.now()
+    switchStartRef.current = tStart
+    firstRenderLoggedForRef.current = null
+    allRenderedLoggedForRef.current = null
+    renderedPagesRef.current = new Set()
+    dPerf(`switch START ${id}`)
+    let cancelled = false
+    void (async () => {
+      let pdf: PDFDocumentProxy
+      try {
+        pdf = await getOrLoad(documentId, data)
+      } catch (err) {
+        console.error('PDF load error:', err)
+        return
+      }
+      const tProxy = performance.now()
+      if (cancelled) return
+      linkServiceRef.current.setDocument(pdf)
+      setPdfProxy(pdf)
       setNumPages(pdf.numPages)
-      const outline = await loadToc(pdf as unknown as Parameters<typeof loadToc>[0])
-      setOutline(outline)
+      const tSet = performance.now()
+      dPerf(`  ${id} proxy-ready ${(tProxy - tStart).toFixed(1)}ms; setState ${(tSet - tProxy).toFixed(1)}ms`)
+
+      const cachedMeta = getMeta(documentId)
+      if (cachedMeta) {
+        setPageDimensions(cachedMeta.dims)
+        setOutline(cachedMeta.outline)
+        dPerf(`  ${id} meta HIT (dims+outline) ${(performance.now() - tSet).toFixed(1)}ms`)
+      } else {
+        const pages = await Promise.all(
+          Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1))
+        )
+        const tPages = performance.now()
+        if (cancelled) return
+        const dims = new Map<number, number>()
+        pages.forEach((page, i) => {
+          dims.set(i + 1, page.getViewport({ scale: 1 }).height)
+        })
+        setPageDimensions(dims)
+        const tDims = performance.now()
+        dPerf(`  ${id} getPage×${pdf.numPages} ${(tPages - tSet).toFixed(1)}ms; dims ${(tDims - tPages).toFixed(1)}ms`)
+        const outline = await loadToc(pdf as unknown as Parameters<typeof loadToc>[0])
+        const tOutline = performance.now()
+        if (cancelled) return
+        setOutline(outline)
+        setMeta(documentId, { dims, outline })
+        dPerf(`  ${id} loadToc ${(tOutline - tDims).toFixed(1)}ms; meta cached`)
+      }
+      const tAfterMeta = performance.now()
+
+      const cached = await window.api.searchIndex.get(documentId)
+      const tCache = performance.now()
+      if (cancelled) return
+      if (cached) {
+        const pageTextsLower = cached.map((s) => s.toLowerCase())
+        setSearchIndex({ numPages: cached.length - 1, pageTexts: cached, pageTextsLower })
+        dPerf(
+          `  ${id} searchIndex HIT ${(tCache - tAfterMeta).toFixed(1)}ms; ` +
+            `switch TOTAL ${(performance.now() - tStart).toFixed(1)}ms`
+        )
+        return
+      }
+      dPerf(`  ${id} searchIndex MISS, building (lookup ${(tCache - tAfterMeta).toFixed(1)}ms)`)
       buildSearchIndex(pdf as unknown as Parameters<typeof buildSearchIndex>[0])
-        .then(setSearchIndex)
+        .then((idx) => {
+          if (cancelled) return
+          setSearchIndex(idx)
+          void window.api.searchIndex.put(documentId, idx.pageTexts)
+          dPerf(`  ${id} buildSearchIndex done ${(performance.now() - tCache).toFixed(1)}ms`)
+        })
         .catch((err) => console.error('search index build failed:', err))
-    },
-    [setNumPages, setPageDimensions, setOutline, setSearchIndex]
-  )
+      dPerf(`  ${id} switch TOTAL (no-search) ${(performance.now() - tStart).toFixed(1)}ms`)
+    })()
+    return () => {
+      cancelled = true
+      const dt = performance.now() - tStart
+      // Effect cleanup: either StrictMode immediate remount (~ms) or the user
+      // switching docs later (sec+). Only the former matters for latency.
+      if (dt < 100) dPerf(`switch cleanup ${id} after ${dt.toFixed(1)}ms (likely StrictMode)`)
+    }
+  }, [documentId, data, setNumPages, setPageDimensions, setOutline, setSearchIndex])
 
   return (
     <div className={`pdf-viewer${noteMode ? ' pdf-viewer--note-mode' : ''}`}>
       <SearchBar search={search} indexReady={searchIndexReady} />
       <div className="pdf-document" ref={containerRef}>
         <div className="pdf-pages-inner">
-          <Document
-            file={file}
-            onLoadSuccess={onDocumentLoadSuccess}
-            onLoadError={(err) => console.error('PDF load error:', err)}
-            onItemClick={({ pageNumber }) => onItemClick(pageNumber)}
-          >
-            {layout.topSpacer > 0 && (
-              <div className="pdf-spacer" style={{ height: layout.topSpacer }} />
-            )}
-            {renderWindow(
-              layout.windowA,
-              scale,
-              setPageRefCombined,
-              getPlaceholderHeight,
-              onPageRenderSuccess,
-              customTextRenderer,
-              renderPageOverlay,
-              handlePageMouseDown
-            )}
-            {layout.middleSpacer > 0 && (
-              <div className="pdf-spacer" style={{ height: layout.middleSpacer }} />
-            )}
-            {layout.windowB &&
-              renderWindow(
-                layout.windowB,
+          {pdfProxy && (
+            <DocumentContext.Provider value={documentContextValue}>
+              {layout.topSpacer > 0 && (
+                <div className="pdf-spacer" style={{ height: layout.topSpacer }} />
+              )}
+              {renderWindow(
+                pdfProxy,
+                layout.windowA,
                 scale,
                 setPageRefCombined,
                 getPlaceholderHeight,
-                onPageRenderSuccess,
+                wrappedOnPageRenderSuccess,
                 customTextRenderer,
                 renderPageOverlay,
                 handlePageMouseDown
               )}
-            {layout.bottomSpacer > 0 && (
-              <div className="pdf-spacer" style={{ height: layout.bottomSpacer }} />
-            )}
-          </Document>
+              {layout.middleSpacer > 0 && (
+                <div className="pdf-spacer" style={{ height: layout.middleSpacer }} />
+              )}
+              {layout.windowB &&
+                renderWindow(
+                  pdfProxy,
+                  layout.windowB,
+                  scale,
+                  setPageRefCombined,
+                  getPlaceholderHeight,
+                  onPageRenderSuccess,
+                  customTextRenderer,
+                  renderPageOverlay,
+                  handlePageMouseDown
+                )}
+              {layout.bottomSpacer > 0 && (
+                <div className="pdf-spacer" style={{ height: layout.bottomSpacer }} />
+              )}
+            </DocumentContext.Provider>
+          )}
         </div>
       </div>
     </div>

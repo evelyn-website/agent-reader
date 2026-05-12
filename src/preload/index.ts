@@ -27,6 +27,12 @@ const api = {
     open: (): Promise<string | null> => ipcRenderer.invoke('project:open'),
     scan: (path: string): Promise<ProjectScan> => ipcRenderer.invoke('project:scan', path),
     listRecent: (): Promise<ProjectRow[]> => ipcRenderer.invoke('project:listRecent')
+  },
+  searchIndex: {
+    get: (documentId: string): Promise<string[] | null> =>
+      ipcRenderer.invoke('searchIndex:get', documentId),
+    put: (documentId: string, pageTexts: string[]): Promise<null> =>
+      ipcRenderer.invoke('searchIndex:put', documentId, pageTexts)
   }
 }
 

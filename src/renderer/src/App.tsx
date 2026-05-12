@@ -11,7 +11,11 @@ import { useZoom } from './components/useZoom'
 import { useWindowedPages } from './components/useWindowedPages'
 import { useSearch } from './components/useSearch'
 import { useAnnotations, type HighlightColor } from './components/useAnnotations'
+import { clearAll as clearPdfProxyCache } from './components/pdfProxyCache'
+import { createDebug } from './lib/debug'
 import type { OutlineNode } from './components/loadToc'
+
+const dPerf = createDebug('pdf:perf')
 import type { SearchIndex } from './components/buildSearchIndex'
 import type { ProjectRow } from '../../main/db'
 import type { ProjectScan } from '../../main/project'
@@ -142,11 +146,19 @@ export default function App(): React.JSX.Element {
   const annotations = useAnnotations(pdf?.documentId ?? null)
 
   const loadPdfPath = useCallback(async (path: string): Promise<void> => {
+    const t0 = performance.now()
+    dPerf(`click→loadPdfPath START ${path.split('/').pop()}`)
     const { data, document } = await window.api.readPdf(path)
+    const t1 = performance.now()
+    dPerf(
+      `  loadPdfPath readPdf IPC ${(t1 - t0).toFixed(1)}ms ` +
+        `bytes=${data.length} docId=${document.id.slice(0, 8)}`
+    )
     setOutline([])
     setSearchIndex(null)
     setNoteMode(false)
     setPdf({ path, data, documentId: document.id })
+    dPerf(`  loadPdfPath setPdf ${(performance.now() - t1).toFixed(1)}ms`)
   }, [])
 
   const handleOpen = useCallback(async (): Promise<void> => {
@@ -157,6 +169,8 @@ export default function App(): React.JSX.Element {
 
   const openProjectByPath = useCallback(async (path: string): Promise<void> => {
     const scan = await window.api.project.scan(path)
+    clearPdfProxyCache()
+    setPdf(null)
     setProject(scan)
     setLeftTab('files')
     setLeftOpen(true)
@@ -258,13 +272,13 @@ export default function App(): React.JSX.Element {
             <PDFViewer
               ref={pdfRef}
               data={pdf.data}
+              documentId={pdf.documentId}
               scale={scale}
               setNumPages={setNumPages}
               layout={windowed.layout}
               setPageRef={windowed.setPageRef}
               getPlaceholderHeight={windowed.getPlaceholderHeight}
               onPageRenderSuccess={windowed.onPageRenderSuccess}
-              onItemClick={windowed.scrollToPage}
               setPageDimensions={windowed.setPageDimensions}
               setOutline={setOutline}
               setSearchIndex={setSearchIndex}

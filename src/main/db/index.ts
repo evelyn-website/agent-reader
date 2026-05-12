@@ -230,3 +230,28 @@ export function listRecentProjects(limit = 10): ProjectRow[] {
 export function deleteProject(path: string): void {
   getDb().prepare(`DELETE FROM projects WHERE path = ?`).run(path)
 }
+
+export const SEARCH_INDEX_SCHEMA_V = 1
+
+export function getSearchIndex(documentId: string): string[] | null {
+  const row = getDb()
+    .prepare<[string, number], { pages_json: string }>(
+      `SELECT pages_json FROM search_indexes
+        WHERE document_id = ? AND schema_v = ?`
+    )
+    .get(documentId, SEARCH_INDEX_SCHEMA_V)
+  return row ? (JSON.parse(row.pages_json) as string[]) : null
+}
+
+export function putSearchIndex(documentId: string, pageTexts: string[]): void {
+  getDb()
+    .prepare(
+      `INSERT INTO search_indexes (document_id, pages_json, schema_v, built_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(document_id) DO UPDATE SET
+         pages_json = excluded.pages_json,
+         schema_v   = excluded.schema_v,
+         built_at   = excluded.built_at`
+    )
+    .run(documentId, JSON.stringify(pageTexts), SEARCH_INDEX_SCHEMA_V, Date.now())
+}
