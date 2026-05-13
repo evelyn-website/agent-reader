@@ -65,6 +65,37 @@ const migrations: Migration[] = [
         built_at     INTEGER NOT NULL
       );
     `)
+  },
+  (db) => {
+    db.exec(`
+      CREATE TABLE chat_sessions (
+        id                  TEXT PRIMARY KEY,
+        scope_key           TEXT NOT NULL,
+        title               TEXT NOT NULL,
+        origin_document_id  TEXT REFERENCES documents(id) ON DELETE SET NULL,
+        origin_page_number  INTEGER,
+        origin_text_excerpt TEXT,
+        claude_session_id   TEXT,
+        created_at          INTEGER NOT NULL,
+        updated_at          INTEGER NOT NULL,
+        last_message_at     INTEGER
+      );
+      CREATE INDEX idx_chat_sessions_scope_updated
+        ON chat_sessions(scope_key, COALESCE(last_message_at, updated_at) DESC);
+
+      CREATE TABLE chat_messages (
+        id          TEXT PRIMARY KEY,
+        session_id  TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+        role        TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+        content     TEXT NOT NULL,
+        status      TEXT NOT NULL CHECK (status IN ('complete', 'pending', 'error')),
+        created_at  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL,
+        error_text  TEXT
+      );
+      CREATE INDEX idx_chat_messages_session_created
+        ON chat_messages(session_id, created_at);
+    `)
   }
 ]
 

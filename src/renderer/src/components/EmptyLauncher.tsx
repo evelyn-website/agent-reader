@@ -1,4 +1,4 @@
-import type { ProjectRow } from '../../../main/db'
+import type { ProjectRow } from '../../../shared/dbTypes'
 import { FolderIcon, PageIcon } from './icons'
 
 interface Props {

@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import ProjectDashboard from './ProjectDashboard'
-import type { ProjectDashboard as ProjectDashboardData, ProjectMarkSummary } from '../../../main/db'
+import type {
+  ProjectDashboard as ProjectDashboardData,
+  ProjectMarkSummary
+} from '../../../shared/dbTypes'
 import type { ProjectScan } from '../../../main/project'
 
 const project: ProjectScan = {

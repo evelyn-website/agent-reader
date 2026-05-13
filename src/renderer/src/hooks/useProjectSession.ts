@@ -3,7 +3,7 @@ import type {
   ProjectDashboard as ProjectDashboardData,
   ProjectMarkSummary,
   ProjectRow
-} from '../../../main/db'
+} from '../../../shared/dbTypes'
 import type { ProjectScan } from '../../../main/project'
 import type { PdfFile } from './useDocumentSession'
 

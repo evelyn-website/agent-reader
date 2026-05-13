@@ -102,7 +102,17 @@ export default function App(): React.JSX.Element {
     }
   ]
   const rightTabs: SidePanelTab[] = [
-    { id: 'chat', label: 'Chat', content: <ChatTabContent /> },
+    {
+      id: 'chat',
+      label: 'Chat',
+      content: (
+        <ChatTabContent
+          projectPath={project?.path ?? null}
+          documentId={pdf?.documentId ?? null}
+          currentPage={pdf ? windowed.currentPage : null}
+        />
+      )
+    },
     {
       id: 'marks',
       label: 'Marks',

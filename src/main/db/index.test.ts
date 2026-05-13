@@ -5,6 +5,13 @@ import {
   setDbForTesting,
   recordOpen,
   listRecent,
+  listChatSessions,
+  createChatSession,
+  getChatSession,
+  updateChatSessionTitle,
+  deleteChatSession,
+  listChatMessages,
+  createChatMessage,
   createAnnotation,
   listAnnotations,
   updateAnnotation,
@@ -65,6 +72,104 @@ describe('recordOpen', () => {
     const recents = listRecent()
     expect(recents[0].filename).toBe('b.pdf')
     expect(recents[1].filename).toBe('a.pdf')
+  })
+})
+
+describe('chat sessions', () => {
+  let db: Database.Database
+  let docId: string
+
+  beforeEach(() => {
+    db = createDb(':memory:')
+    setDbForTesting(db)
+    docId = recordOpen({ path: PDF_PATH, data: PDF_DATA }).id
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    setDbForTesting(null)
+    db.close()
+  })
+
+  it('creates and lists sessions for a scope newest-first', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
+    const older = createChatSession({
+      scope_key: '/project',
+      title: 'Older',
+      origin_document_id: docId,
+      origin_page_number: 2
+    })
+    vi.setSystemTime(2000)
+    const newer = createChatSession({ scope_key: '/project', title: 'Newer' })
+    createChatSession({ scope_key: '/other', title: 'Other' })
+
+    const sessions = listChatSessions('/project')
+
+    expect(sessions.map((session) => session.id)).toEqual([newer.id, older.id])
+    expect(sessions[1]).toMatchObject({
+      title: 'Older',
+      origin_document_id: docId,
+      origin_page_number: 2,
+      message_count: 0
+    })
+  })
+
+  it('renames and deletes sessions', () => {
+    const session = createChatSession({ scope_key: '/project', title: 'Draft' })
+
+    const renamed = updateChatSessionTitle(session.id, 'Renamed')
+    expect(renamed?.title).toBe('Renamed')
+
+    deleteChatSession(session.id)
+    expect(getChatSession(session.id)).toBeNull()
+  })
+
+  it('stores messages and updates session ordering metadata', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
+    const older = createChatSession({ scope_key: '/project', title: 'Older' })
+    vi.setSystemTime(2000)
+    const newer = createChatSession({ scope_key: '/project', title: 'Newer' })
+    vi.setSystemTime(3000)
+    const message = createChatMessage({
+      session_id: older.id,
+      role: 'user',
+      content: 'hello from the chat composer'
+    })
+
+    expect(message.status).toBe('complete')
+    expect(listChatMessages(older.id).map((row) => row.content)).toEqual([
+      'hello from the chat composer'
+    ])
+
+    const sessions = listChatSessions('/project')
+    expect(sessions.map((session) => session.id)).toEqual([older.id, newer.id])
+    expect(sessions[0]).toMatchObject({
+      message_count: 1,
+      last_message_preview: 'hello from the chat composer',
+      last_message_at: 3000
+    })
+  })
+
+  it('cascades messages when a session is deleted', () => {
+    const session = createChatSession({ scope_key: '/project' })
+    createChatMessage({ session_id: session.id, role: 'user', content: 'hello' })
+
+    deleteChatSession(session.id)
+
+    expect(listChatMessages(session.id)).toHaveLength(0)
+  })
+
+  it('defaults omitted or whitespace-only titles to New session on create and update', () => {
+    const noTitle = createChatSession({ scope_key: '/project' })
+    expect(noTitle.title).toBe('New session')
+
+    const blankTitle = createChatSession({ scope_key: '/project', title: '   \t  ' })
+    expect(blankTitle.title).toBe('New session')
+
+    const renamed = updateChatSessionTitle(noTitle.id, '  \n  ')
+    expect(renamed?.title).toBe('New session')
   })
 })
 

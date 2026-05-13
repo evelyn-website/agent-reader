@@ -6,7 +6,7 @@ import {
   type UseAnnotationsResult
 } from './useAnnotations'
 import { AllIcon, ClockIcon, HighlightIcon, NoteIcon, PageIcon, TrashIcon } from './icons'
-import type { ProjectMarkSummary } from '../../../main/db'
+import type { ProjectMarkSummary } from '../../../shared/dbTypes'
 import { emptyMessage, formatRelativeTime } from './marksTabUtils'
 
 type KindFilter = 'all' | 'highlight' | 'note'

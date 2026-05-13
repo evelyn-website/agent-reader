@@ -11,12 +11,20 @@ import {
   createAnnotation,
   updateAnnotation,
   deleteAnnotation,
+  listChatSessions,
+  createChatSession,
+  updateChatSessionTitle,
+  deleteChatSession,
+  listChatMessages,
+  createChatMessage,
   recordProjectOpen,
   listRecentProjects,
   deleteProject,
   getProjectDashboard,
   getSearchIndex,
   putSearchIndex,
+  type CreateChatMessageInput,
+  type CreateChatSessionInput,
   type CreateAnnotationInput,
   type ProjectDashboard,
   type ProjectRow,
@@ -64,6 +72,31 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('annotations:delete', (_event, id: string) => {
     deleteAnnotation(id)
     return null
+  })
+
+  ipcMain.handle('chat:sessions:list', (_event, scopeKey: string) => {
+    return listChatSessions(scopeKey)
+  })
+
+  ipcMain.handle('chat:sessions:create', (_event, input: CreateChatSessionInput) => {
+    return createChatSession(input)
+  })
+
+  ipcMain.handle('chat:sessions:updateTitle', (_event, id: string, title: string) => {
+    return updateChatSessionTitle(id, title)
+  })
+
+  ipcMain.handle('chat:sessions:delete', (_event, id: string) => {
+    deleteChatSession(id)
+    return null
+  })
+
+  ipcMain.handle('chat:messages:list', (_event, sessionId: string) => {
+    return listChatMessages(sessionId)
+  })
+
+  ipcMain.handle('chat:messages:create', (_event, input: CreateChatMessageInput) => {
+    return createChatMessage(input)
   })
 
   ipcMain.handle('project:open', async () => {

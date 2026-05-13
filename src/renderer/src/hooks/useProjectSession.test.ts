@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProjectDashboard, ProjectMarkSummary } from '../../../main/db'
+import type { ProjectDashboard, ProjectMarkSummary } from '../../../shared/dbTypes'
 import type { ProjectScan } from '../../../main/project'
 import type { PdfFile } from './useDocumentSession'
 import { useProjectSession } from './useProjectSession'

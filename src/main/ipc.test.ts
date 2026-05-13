@@ -20,6 +20,12 @@ vi.mock('./db', () => ({
   createAnnotation: vi.fn(),
   updateAnnotation: vi.fn(),
   deleteAnnotation: vi.fn(),
+  listChatSessions: vi.fn(),
+  createChatSession: vi.fn(),
+  updateChatSessionTitle: vi.fn(),
+  deleteChatSession: vi.fn(),
+  listChatMessages: vi.fn(),
+  createChatMessage: vi.fn(),
   recordProjectOpen: vi.fn(),
   listRecentProjects: vi.fn(),
   deleteProject: vi.fn(),
@@ -62,6 +68,12 @@ describe('registerIpcHandlers', () => {
     expect(channels).toContain('annotations:create')
     expect(channels).toContain('annotations:update')
     expect(channels).toContain('annotations:delete')
+    expect(channels).toContain('chat:sessions:list')
+    expect(channels).toContain('chat:sessions:create')
+    expect(channels).toContain('chat:sessions:updateTitle')
+    expect(channels).toContain('chat:sessions:delete')
+    expect(channels).toContain('chat:messages:list')
+    expect(channels).toContain('chat:messages:create')
     expect(channels).toContain('project:open')
     expect(channels).toContain('project:scan')
     expect(channels).toContain('project:dashboard')
@@ -147,6 +159,72 @@ describe('registerIpcHandlers', () => {
       const result = getHandler('annotations:delete')({}, 'ann-1')
       expect(db.deleteAnnotation).toHaveBeenCalledWith('ann-1')
       expect(result).toBeNull()
+    })
+  })
+
+  describe('chat:sessions:list', () => {
+    it('delegates to listChatSessions', () => {
+      const rows = [{ id: 'session-1' }]
+      vi.mocked(db.listChatSessions).mockReturnValue(rows as ReturnType<typeof db.listChatSessions>)
+      const result = getHandler('chat:sessions:list')({}, '/project')
+      expect(db.listChatSessions).toHaveBeenCalledWith('/project')
+      expect(result).toBe(rows)
+    })
+  })
+
+  describe('chat:sessions:create', () => {
+    it('delegates to createChatSession', () => {
+      const input = { scope_key: '/project', title: 'New session' }
+      const row = { id: 'session-1' }
+      vi.mocked(db.createChatSession).mockReturnValue(
+        row as ReturnType<typeof db.createChatSession>
+      )
+      const result = getHandler('chat:sessions:create')({}, input)
+      expect(db.createChatSession).toHaveBeenCalledWith(input)
+      expect(result).toBe(row)
+    })
+  })
+
+  describe('chat:sessions:updateTitle', () => {
+    it('delegates to updateChatSessionTitle', () => {
+      const row = { id: 'session-1', title: 'Renamed' }
+      vi.mocked(db.updateChatSessionTitle).mockReturnValue(
+        row as ReturnType<typeof db.updateChatSessionTitle>
+      )
+      const result = getHandler('chat:sessions:updateTitle')({}, 'session-1', 'Renamed')
+      expect(db.updateChatSessionTitle).toHaveBeenCalledWith('session-1', 'Renamed')
+      expect(result).toBe(row)
+    })
+  })
+
+  describe('chat:sessions:delete', () => {
+    it('calls deleteChatSession and returns null', () => {
+      const result = getHandler('chat:sessions:delete')({}, 'session-1')
+      expect(db.deleteChatSession).toHaveBeenCalledWith('session-1')
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('chat:messages:list', () => {
+    it('delegates to listChatMessages', () => {
+      const rows = [{ id: 'message-1' }]
+      vi.mocked(db.listChatMessages).mockReturnValue(rows as ReturnType<typeof db.listChatMessages>)
+      const result = getHandler('chat:messages:list')({}, 'session-1')
+      expect(db.listChatMessages).toHaveBeenCalledWith('session-1')
+      expect(result).toBe(rows)
+    })
+  })
+
+  describe('chat:messages:create', () => {
+    it('delegates to createChatMessage', () => {
+      const input = { session_id: 'session-1', role: 'user' as const, content: 'hello' }
+      const row = { id: 'message-1' }
+      vi.mocked(db.createChatMessage).mockReturnValue(
+        row as ReturnType<typeof db.createChatMessage>
+      )
+      const result = getHandler('chat:messages:create')({}, input)
+      expect(db.createChatMessage).toHaveBeenCalledWith(input)
+      expect(result).toBe(row)
     })
   })
 

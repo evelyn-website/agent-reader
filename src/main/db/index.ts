@@ -3,16 +3,39 @@ import { createHash, randomUUID } from 'crypto'
 import { app } from 'electron'
 import Database from 'better-sqlite3'
 import { runMigrations } from './migrations'
+import type {
+  AnnotationRow,
+  ChatMessageRow,
+  ChatSessionRow,
+  ChatSessionSummary,
+  CreateAnnotationInput,
+  CreateChatMessageInput,
+  CreateChatSessionInput,
+  DocumentRow,
+  ProjectDashboard,
+  ProjectMarkSummary,
+  ProjectRow,
+  UpdateAnnotationInput
+} from '../../shared/dbTypes'
 
-export interface DocumentRow {
-  id: string
-  filename: string
-  last_path: string
-  size_bytes: number
-  first_opened_at: number
-  last_opened_at: number
-  open_count: number
-}
+export type {
+  AnnotationKind,
+  AnnotationRow,
+  ChatMessageRow,
+  ChatMessageRole,
+  ChatMessageStatus,
+  ChatSessionRow,
+  ChatSessionSummary,
+  CreateAnnotationInput,
+  CreateChatMessageInput,
+  CreateChatSessionInput,
+  DocumentRow,
+  ProjectDashboard,
+  ProjectDocumentSummary,
+  ProjectMarkSummary,
+  ProjectRow,
+  UpdateAnnotationInput
+} from '../../shared/dbTypes'
 
 let db: Database.Database | null = null
 
@@ -79,41 +102,109 @@ export function listRecent(limit = 50): DocumentRow[] {
     .all(limit)
 }
 
-export type AnnotationKind = 'highlight' | 'note'
-
-export interface AnnotationRow {
-  id: string
-  document_id: string
-  page_number: number
-  kind: AnnotationKind
-  color: string | null
-  rects_json: string | null
-  anchor_x: number | null
-  anchor_y: number | null
-  text_excerpt: string | null
-  comment: string | null
-  created_at: number
-  updated_at: number
+export function listChatSessions(scopeKey: string): ChatSessionSummary[] {
+  return getDb()
+    .prepare<[string], ChatSessionSummary>(
+      `SELECT
+         chat_sessions.*,
+         COUNT(chat_messages.id) AS message_count,
+         (
+           SELECT content
+           FROM chat_messages latest
+           WHERE latest.session_id = chat_sessions.id
+           ORDER BY latest.created_at DESC
+           LIMIT 1
+         ) AS last_message_preview
+       FROM chat_sessions
+       LEFT JOIN chat_messages ON chat_messages.session_id = chat_sessions.id
+       WHERE chat_sessions.scope_key = ?
+       GROUP BY chat_sessions.id
+       ORDER BY COALESCE(chat_sessions.last_message_at, chat_sessions.updated_at) DESC`
+    )
+    .all(scopeKey)
 }
 
-export interface CreateAnnotationInput {
-  document_id: string
-  page_number: number
-  kind: AnnotationKind
-  color?: string | null
-  rects_json?: string | null
-  anchor_x?: number | null
-  anchor_y?: number | null
-  text_excerpt?: string | null
-  comment?: string | null
+export function createChatSession(input: CreateChatSessionInput): ChatSessionRow {
+  const d = getDb()
+  const id = randomUUID()
+  const now = Date.now()
+  d.prepare(
+    `INSERT INTO chat_sessions
+      (id, scope_key, title, origin_document_id, origin_page_number,
+       origin_text_excerpt, claude_session_id, created_at, updated_at, last_message_at)
+     VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL)`
+  ).run(
+    id,
+    input.scope_key,
+    input.title?.trim() || 'New session',
+    input.origin_document_id ?? null,
+    input.origin_page_number ?? null,
+    input.origin_text_excerpt ?? null,
+    now,
+    now
+  )
+  return d.prepare<[string], ChatSessionRow>(`SELECT * FROM chat_sessions WHERE id = ?`).get(id)!
 }
 
-export interface UpdateAnnotationInput {
-  color?: string | null
-  comment?: string | null
-  rects_json?: string | null
-  anchor_x?: number | null
-  anchor_y?: number | null
+export function getChatSession(id: string): ChatSessionRow | null {
+  return (
+    getDb().prepare<[string], ChatSessionRow>(`SELECT * FROM chat_sessions WHERE id = ?`).get(id) ??
+    null
+  )
+}
+
+export function updateChatSessionTitle(id: string, title: string): ChatSessionRow | null {
+  const d = getDb()
+  const existing = getChatSession(id)
+  if (!existing) return null
+  d.prepare(`UPDATE chat_sessions SET title = ?, updated_at = ? WHERE id = ?`).run(
+    title.trim() || 'New session',
+    Date.now(),
+    id
+  )
+  return d.prepare<[string], ChatSessionRow>(`SELECT * FROM chat_sessions WHERE id = ?`).get(id)!
+}
+
+export function deleteChatSession(id: string): void {
+  getDb().prepare(`DELETE FROM chat_sessions WHERE id = ?`).run(id)
+}
+
+export function listChatMessages(sessionId: string): ChatMessageRow[] {
+  return getDb()
+    .prepare<
+      [string],
+      ChatMessageRow
+    >(`SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at, id`)
+    .all(sessionId)
+}
+
+export function createChatMessage(input: CreateChatMessageInput): ChatMessageRow {
+  const d = getDb()
+  const id = randomUUID()
+  const now = Date.now()
+  const create = d.transaction(() => {
+    d.prepare(
+      `INSERT INTO chat_messages
+        (id, session_id, role, content, status, created_at, updated_at, error_text)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      id,
+      input.session_id,
+      input.role,
+      input.content,
+      input.status ?? 'complete',
+      now,
+      now,
+      input.error_text ?? null
+    )
+    d.prepare(`UPDATE chat_sessions SET updated_at = ?, last_message_at = ? WHERE id = ?`).run(
+      now,
+      now,
+      input.session_id
+    )
+  })
+  create()
+  return d.prepare<[string], ChatMessageRow>(`SELECT * FROM chat_messages WHERE id = ?`).get(id)!
 }
 
 export function listAnnotations(documentId: string): AnnotationRow[] {
@@ -182,45 +273,6 @@ export function updateAnnotation(id: string, patch: UpdateAnnotationInput): Anno
 
 export function deleteAnnotation(id: string): void {
   getDb().prepare(`DELETE FROM annotations WHERE id = ?`).run(id)
-}
-
-export interface ProjectRow {
-  path: string
-  name: string
-  first_opened_at: number
-  last_opened_at: number
-  open_count: number
-}
-
-export interface ProjectDocumentSummary {
-  path: string
-  name: string
-  document_id: string | null
-  last_opened_at: number | null
-  open_count: number
-  mark_count: number
-  highlight_count: number
-  note_count: number
-}
-
-export interface ProjectMarkSummary {
-  id: string
-  document_id: string
-  path: string
-  document_name: string
-  page_number: number
-  kind: AnnotationKind
-  color: string | null
-  text_excerpt: string | null
-  comment: string | null
-  created_at: number
-  updated_at: number
-}
-
-export interface ProjectDashboard {
-  documents: ProjectDocumentSummary[]
-  resumeDocument: ProjectDocumentSummary | null
-  recentMarks: ProjectMarkSummary[]
 }
 
 export function recordProjectOpen(args: { path: string; name: string }): ProjectRow {

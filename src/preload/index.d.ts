@@ -1,12 +1,17 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   AnnotationRow,
+  ChatMessageRow,
+  ChatSessionRow,
+  ChatSessionSummary,
+  CreateChatMessageInput,
+  CreateChatSessionInput,
   CreateAnnotationInput,
   DocumentRow,
   ProjectDashboard,
   ProjectRow,
   UpdateAnnotationInput
-} from '../main/db'
+} from '../shared/dbTypes'
 import type { ProjectScan } from '../main/project'
 
 declare global {
@@ -20,6 +25,18 @@ declare global {
         create: (input: CreateAnnotationInput) => Promise<AnnotationRow>
         update: (id: string, patch: UpdateAnnotationInput) => Promise<AnnotationRow | null>
         delete: (id: string) => Promise<null>
+      }
+      chat: {
+        sessions: {
+          list: (scopeKey: string) => Promise<ChatSessionSummary[]>
+          create: (input: CreateChatSessionInput) => Promise<ChatSessionRow>
+          updateTitle: (id: string, title: string) => Promise<ChatSessionRow | null>
+          delete: (id: string) => Promise<null>
+        }
+        messages: {
+          list: (sessionId: string) => Promise<ChatMessageRow[]>
+          create: (input: CreateChatMessageInput) => Promise<ChatMessageRow>
+        }
       }
       project: {
         open: () => Promise<string | null>

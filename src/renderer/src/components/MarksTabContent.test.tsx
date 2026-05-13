@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import MarksTabContent from './MarksTabContent'
 import { formatRelativeTime, emptyMessage } from './marksTabUtils'
 import type { Annotation, UseAnnotationsResult } from './useAnnotations'
-import type { ProjectMarkSummary } from '../../../main/db'
+import type { ProjectMarkSummary } from '../../../shared/dbTypes'
 
 const NOW = 1_700_000_000_000
 

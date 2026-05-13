@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import App from './App'
-import type { DocumentRow } from '../../main/db'
+import type { DocumentRow } from '../../shared/dbTypes'
 
 const appMocks = vi.hoisted(() => ({
   currentPage: 1,

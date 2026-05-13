@@ -2,7 +2,7 @@ import type {
   ProjectDashboard as ProjectDashboardData,
   ProjectDocumentSummary,
   ProjectMarkSummary
-} from '../../../main/db'
+} from '../../../shared/dbTypes'
 import type { ProjectScan } from '../../../main/project'
 import { FolderIcon, NoteIcon, PageIcon } from './icons'
 import { formatRelativeTime } from './marksTabUtils'

@@ -2,12 +2,17 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AnnotationRow,
+  ChatMessageRow,
+  ChatSessionRow,
+  ChatSessionSummary,
+  CreateChatMessageInput,
+  CreateChatSessionInput,
   CreateAnnotationInput,
   DocumentRow,
   ProjectDashboard,
   ProjectRow,
   UpdateAnnotationInput
-} from '../main/db'
+} from '../shared/dbTypes'
 import type { ProjectScan } from '../main/project'
 
 export type ReadPdfResult = { data: Buffer; document: DocumentRow }
@@ -23,6 +28,23 @@ const api = {
     update: (id: string, patch: UpdateAnnotationInput): Promise<AnnotationRow | null> =>
       ipcRenderer.invoke('annotations:update', id, patch),
     delete: (id: string): Promise<null> => ipcRenderer.invoke('annotations:delete', id)
+  },
+  chat: {
+    sessions: {
+      list: (scopeKey: string): Promise<ChatSessionSummary[]> =>
+        ipcRenderer.invoke('chat:sessions:list', scopeKey),
+      create: (input: CreateChatSessionInput): Promise<ChatSessionRow> =>
+        ipcRenderer.invoke('chat:sessions:create', input),
+      updateTitle: (id: string, title: string): Promise<ChatSessionRow | null> =>
+        ipcRenderer.invoke('chat:sessions:updateTitle', id, title),
+      delete: (id: string): Promise<null> => ipcRenderer.invoke('chat:sessions:delete', id)
+    },
+    messages: {
+      list: (sessionId: string): Promise<ChatMessageRow[]> =>
+        ipcRenderer.invoke('chat:messages:list', sessionId),
+      create: (input: CreateChatMessageInput): Promise<ChatMessageRow> =>
+        ipcRenderer.invoke('chat:messages:create', input)
+    }
   },
   project: {
     open: (): Promise<string | null> => ipcRenderer.invoke('project:open'),
