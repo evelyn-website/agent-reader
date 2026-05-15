@@ -20,16 +20,18 @@ beforeEach(() => {
         delete: vi.fn()
       },
       messages: {
-        list: vi.fn().mockResolvedValue([]),
-        create: vi.fn()
+        list: vi.fn().mockResolvedValue([])
       }
     },
     project: {
       open: vi.fn(),
       scan: vi.fn(),
-      dashboard: vi
-        .fn()
-        .mockResolvedValue({ documents: [], resumeDocument: null, recentMarks: [] }),
+      dashboard: vi.fn().mockResolvedValue({
+        documents: [],
+        resumeDocument: null,
+        recentMarks: [],
+        recentSessions: []
+      }),
       listRecent: vi.fn().mockResolvedValue([])
     },
     searchIndex: {

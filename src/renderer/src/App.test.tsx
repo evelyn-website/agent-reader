@@ -270,7 +270,8 @@ beforeEach(() => {
       }
     ],
     resumeDocument: null,
-    recentMarks: []
+    recentMarks: [],
+    recentSessions: []
   })
   window.api.project.listRecent = vi.fn().mockResolvedValue([])
 })

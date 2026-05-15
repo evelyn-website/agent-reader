@@ -25,7 +25,6 @@ vi.mock('./db', () => ({
   updateChatSessionTitle: vi.fn(),
   deleteChatSession: vi.fn(),
   listChatMessages: vi.fn(),
-  createChatMessage: vi.fn(),
   recordProjectOpen: vi.fn(),
   listRecentProjects: vi.fn(),
   deleteProject: vi.fn(),
@@ -73,7 +72,6 @@ describe('registerIpcHandlers', () => {
     expect(channels).toContain('chat:sessions:updateTitle')
     expect(channels).toContain('chat:sessions:delete')
     expect(channels).toContain('chat:messages:list')
-    expect(channels).toContain('chat:messages:create')
     expect(channels).toContain('project:open')
     expect(channels).toContain('project:scan')
     expect(channels).toContain('project:dashboard')
@@ -215,19 +213,6 @@ describe('registerIpcHandlers', () => {
     })
   })
 
-  describe('chat:messages:create', () => {
-    it('delegates to createChatMessage', () => {
-      const input = { session_id: 'session-1', role: 'user' as const, content: 'hello' }
-      const row = { id: 'message-1' }
-      vi.mocked(db.createChatMessage).mockReturnValue(
-        row as ReturnType<typeof db.createChatMessage>
-      )
-      const result = getHandler('chat:messages:create')({}, input)
-      expect(db.createChatMessage).toHaveBeenCalledWith(input)
-      expect(result).toBe(row)
-    })
-  })
-
   describe('project:open', () => {
     it('returns null when dialog is canceled', async () => {
       vi.mocked(dialog.showOpenDialog).mockResolvedValue({ canceled: true, filePaths: [] })
@@ -260,12 +245,17 @@ describe('registerIpcHandlers', () => {
   describe('project:dashboard', () => {
     it('flattens project files and delegates to getProjectDashboard', () => {
       const scan = { path: '/project', name: 'project', tree: [] }
-      const dashboard = { documents: [], resumeDocument: null, recentMarks: [] }
+      const dashboard = {
+        documents: [],
+        resumeDocument: null,
+        recentMarks: [],
+        recentSessions: []
+      }
       vi.mocked(project.flattenProjectFiles).mockReturnValue(['/project/a.pdf'])
       vi.mocked(db.getProjectDashboard).mockReturnValue(dashboard)
       const result = getHandler('project:dashboard')({}, scan)
       expect(project.flattenProjectFiles).toHaveBeenCalledWith(scan.tree)
-      expect(db.getProjectDashboard).toHaveBeenCalledWith(['/project/a.pdf'])
+      expect(db.getProjectDashboard).toHaveBeenCalledWith('/project', ['/project/a.pdf'])
       expect(result).toBe(dashboard)
     })
   })

@@ -130,4 +130,5 @@ export interface ProjectDashboard {
   documents: ProjectDocumentSummary[]
   resumeDocument: ProjectDocumentSummary | null
   recentMarks: ProjectMarkSummary[]
+  recentSessions: ChatSessionSummary[]
 }

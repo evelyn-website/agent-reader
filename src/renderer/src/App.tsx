@@ -1,4 +1,5 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ChatSessionSummary } from '../../shared/dbTypes'
 import PDFViewer, { type PDFViewerHandle } from './components/PDFViewer'
 import Toolbar from './components/Toolbar'
 import SidePanel, { type SidePanelTab } from './components/SidePanel'
@@ -26,8 +27,11 @@ export default function App(): React.JSX.Element {
     setLeftTab,
     setRightTab,
     toggleLeft,
-    focusLeftTab
+    focusLeftTab,
+    focusRightTab
   } = useSidePanels()
+  const [selectedChatSessionId, setSelectedChatSessionId] = useState<string | null>(null)
+  const [newSessionSignal, setNewSessionSignal] = useState(0)
   const {
     pdf,
     viewerReady,
@@ -77,6 +81,26 @@ export default function App(): React.JSX.Element {
     pdfRef.current?.triggerHighlight(color)
   }, [])
 
+  const handleOpenSession = useCallback(
+    (session: ChatSessionSummary) => {
+      setSelectedChatSessionId(session.id)
+      focusRightTab('chat')
+    },
+    [focusRightTab]
+  )
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!e.metaKey || e.altKey || e.ctrlKey || !e.shiftKey) return
+      if (e.key !== 'n' && e.key !== 'N') return
+      e.preventDefault()
+      focusRightTab('chat')
+      setNewSessionSignal((n) => n + 1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [focusRightTab])
+
   const leftTabs: SidePanelTab[] = [
     {
       id: 'files',
@@ -110,6 +134,9 @@ export default function App(): React.JSX.Element {
           projectPath={project?.path ?? null}
           documentId={pdf?.documentId ?? null}
           currentPage={pdf ? windowed.currentPage : null}
+          selectedSessionId={selectedChatSessionId}
+          onSelectSession={setSelectedChatSessionId}
+          newSessionSignal={newSessionSignal}
         />
       )
     },
@@ -195,6 +222,7 @@ export default function App(): React.JSX.Element {
               loading={projectDashboardLoading}
               onOpenDocument={openProjectDocument}
               onOpenMark={openProjectMark}
+              onOpenSession={handleOpenSession}
             />
           ) : (
             <EmptyLauncher

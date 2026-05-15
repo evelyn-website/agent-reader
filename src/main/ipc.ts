@@ -16,14 +16,12 @@ import {
   updateChatSessionTitle,
   deleteChatSession,
   listChatMessages,
-  createChatMessage,
   recordProjectOpen,
   listRecentProjects,
   deleteProject,
   getProjectDashboard,
   getSearchIndex,
   putSearchIndex,
-  type CreateChatMessageInput,
   type CreateChatSessionInput,
   type CreateAnnotationInput,
   type ProjectDashboard,
@@ -95,10 +93,6 @@ export function registerIpcHandlers(): void {
     return listChatMessages(sessionId)
   })
 
-  ipcMain.handle('chat:messages:create', (_event, input: CreateChatMessageInput) => {
-    return createChatMessage(input)
-  })
-
   ipcMain.handle('project:open', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
       properties: ['openDirectory']
@@ -113,7 +107,7 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('project:dashboard', (_event, scan: ProjectScan): ProjectDashboard => {
-    return getProjectDashboard(flattenProjectFiles(scan.tree))
+    return getProjectDashboard(scan.path, flattenProjectFiles(scan.tree))
   })
 
   ipcMain.handle('searchIndex:get', (_event, documentId: string) => {

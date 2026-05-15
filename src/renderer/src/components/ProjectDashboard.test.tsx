@@ -54,7 +54,8 @@ function makeDashboard(overrides: Partial<ProjectDashboardData> = {}): ProjectDa
       }
     ],
     resumeDocument: null,
-    recentMarks: [mark]
+    recentMarks: [mark],
+    recentSessions: []
   }
   return { ...data, ...overrides }
 }
@@ -69,6 +70,7 @@ describe('ProjectDashboard', () => {
         loading={false}
         onOpenDocument={onOpenDocument}
         onOpenMark={vi.fn()}
+        onOpenSession={vi.fn()}
       />
     )
 
@@ -86,6 +88,7 @@ describe('ProjectDashboard', () => {
         loading={false}
         onOpenDocument={vi.fn()}
         onOpenMark={vi.fn()}
+        onOpenSession={vi.fn()}
       />
     )
 
@@ -101,6 +104,7 @@ describe('ProjectDashboard', () => {
         loading={false}
         onOpenDocument={vi.fn()}
         onOpenMark={vi.fn()}
+        onOpenSession={vi.fn()}
       />
     )
 
@@ -116,6 +120,7 @@ describe('ProjectDashboard', () => {
         loading={false}
         onOpenDocument={vi.fn()}
         onOpenMark={onOpenMark}
+        onOpenSession={vi.fn()}
       />
     )
 

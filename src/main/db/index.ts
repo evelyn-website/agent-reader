@@ -309,12 +309,38 @@ function pathPlaceholders(paths: string[]): string {
   return paths.map(() => '?').join(', ')
 }
 
-export function getProjectDashboard(paths: string[], markLimit = 24): ProjectDashboard {
+export function getProjectDashboard(
+  projectPath: string,
+  paths: string[],
+  markLimit = 24,
+  sessionLimit = 8
+): ProjectDashboard {
+  const d = getDb()
+  const recentSessions = d
+    .prepare<[string, number], ChatSessionSummary>(
+      `SELECT
+         chat_sessions.*,
+         COUNT(chat_messages.id) AS message_count,
+         (
+           SELECT content
+           FROM chat_messages latest
+           WHERE latest.session_id = chat_sessions.id
+           ORDER BY latest.created_at DESC
+           LIMIT 1
+         ) AS last_message_preview
+       FROM chat_sessions
+       LEFT JOIN chat_messages ON chat_messages.session_id = chat_sessions.id
+       WHERE chat_sessions.scope_key = ?
+       GROUP BY chat_sessions.id
+       ORDER BY COALESCE(chat_sessions.last_message_at, chat_sessions.updated_at) DESC
+       LIMIT ?`
+    )
+    .all(projectPath, sessionLimit)
+
   if (paths.length === 0) {
-    return { documents: [], resumeDocument: null, recentMarks: [] }
+    return { documents: [], resumeDocument: null, recentMarks: [], recentSessions }
   }
 
-  const d = getDb()
   const placeholders = pathPlaceholders(paths)
   const rows = d
     .prepare(
@@ -385,7 +411,8 @@ export function getProjectDashboard(paths: string[], markLimit = 24): ProjectDas
   return {
     documents,
     resumeDocument: documents.find((doc) => doc.last_opened_at !== null) ?? null,
-    recentMarks
+    recentMarks,
+    recentSessions
   }
 }
 

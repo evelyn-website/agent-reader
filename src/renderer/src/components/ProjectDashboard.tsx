@@ -1,4 +1,5 @@
 import type {
+  ChatSessionSummary,
   ProjectDashboard as ProjectDashboardData,
   ProjectDocumentSummary,
   ProjectMarkSummary
@@ -13,6 +14,7 @@ interface Props {
   loading: boolean
   onOpenDocument: (path: string) => void
   onOpenMark: (mark: ProjectMarkSummary) => void
+  onOpenSession: (session: ChatSessionSummary) => void
 }
 
 export default function ProjectDashboard({
@@ -20,10 +22,12 @@ export default function ProjectDashboard({
   dashboard,
   loading,
   onOpenDocument,
-  onOpenMark
+  onOpenMark,
+  onOpenSession
 }: Props): React.JSX.Element {
   const documents = dashboard?.documents ?? flattenProjectDocs(project)
   const recentMarks = dashboard?.recentMarks ?? []
+  const recentSessions = dashboard?.recentSessions ?? []
   const resumeDocument = dashboard?.resumeDocument ?? null
 
   return (
@@ -62,6 +66,33 @@ export default function ProjectDashboard({
               </span>
             </span>
           </button>
+        </section>
+      )}
+
+      {recentSessions.length > 0 && (
+        <section className="project-dashboard__section">
+          <div className="project-dashboard__section-heading">Recent Sessions</div>
+          <div className="project-session-list">
+            {recentSessions.map((session) => (
+              <button
+                key={session.id}
+                type="button"
+                className="project-session-row"
+                onClick={() => onOpenSession(session)}
+                title={session.title}
+              >
+                <span className="project-session-row__body">
+                  <span className="project-session-row__title">{session.title}</span>
+                  <span className="project-session-row__meta">
+                    {session.message_count} message{session.message_count === 1 ? '' : 's'}
+                  </span>
+                </span>
+                <span className="project-session-row__time">
+                  {formatRelativeTime(session.last_message_at ?? session.updated_at)}
+                </span>
+              </button>
+            ))}
+          </div>
         </section>
       )}
 

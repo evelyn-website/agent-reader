@@ -25,7 +25,8 @@ const dashboard: ProjectDashboard = {
     }
   ],
   resumeDocument: null,
-  recentMarks: []
+  recentMarks: [],
+  recentSessions: []
 }
 
 function pdf(path: string, documentId: string): PdfFile {

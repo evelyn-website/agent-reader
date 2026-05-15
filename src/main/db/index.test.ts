@@ -301,7 +301,7 @@ describe('project dashboard', () => {
     createAnnotation({ document_id: newer.id, page_number: 3, kind: 'note', comment: 'note' })
     createAnnotation({ document_id: older.id, page_number: 1, kind: 'highlight', color: 'blue' })
 
-    const dashboard = getProjectDashboard([
+    const dashboard = getProjectDashboard('/project', [
       '/project/a.pdf',
       '/project/unread.pdf',
       '/project/b.pdf'
@@ -353,7 +353,7 @@ describe('project dashboard', () => {
       text_excerpt: 'outside'
     })
 
-    const dashboard = getProjectDashboard(['/project/a.pdf'])
+    const dashboard = getProjectDashboard('/project', ['/project/a.pdf'])
 
     expect(dashboard.recentMarks.map((m) => m.id)).toEqual([newMark.id, oldMark.id])
     expect(dashboard.recentMarks[0]).toMatchObject({

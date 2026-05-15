@@ -5,7 +5,6 @@ import type {
   ChatMessageRow,
   ChatSessionRow,
   ChatSessionSummary,
-  CreateChatMessageInput,
   CreateChatSessionInput,
   CreateAnnotationInput,
   DocumentRow,
@@ -41,9 +40,7 @@ const api = {
     },
     messages: {
       list: (sessionId: string): Promise<ChatMessageRow[]> =>
-        ipcRenderer.invoke('chat:messages:list', sessionId),
-      create: (input: CreateChatMessageInput): Promise<ChatMessageRow> =>
-        ipcRenderer.invoke('chat:messages:create', input)
+        ipcRenderer.invoke('chat:messages:list', sessionId)
     }
   },
   project: {

@@ -4,7 +4,6 @@ import type {
   ChatMessageRow,
   ChatSessionRow,
   ChatSessionSummary,
-  CreateChatMessageInput,
   CreateChatSessionInput,
   CreateAnnotationInput,
   DocumentRow,
@@ -35,7 +34,6 @@ declare global {
         }
         messages: {
           list: (sessionId: string) => Promise<ChatMessageRow[]>
-          create: (input: CreateChatMessageInput) => Promise<ChatMessageRow>
         }
       }
       project: {
