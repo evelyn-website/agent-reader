@@ -1,5 +1,6 @@
 import { ipcMain, dialog } from 'electron'
 import { readFileSync } from 'fs'
+import { chatPtyManager } from './pty/manager'
 
 const PERF = process.env.DEBUG_PDF_PERF === '1'
 const perfLog = (msg: string): void => {
@@ -85,12 +86,37 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('chat:sessions:delete', (_event, id: string) => {
+    chatPtyManager.kill(id)
     deleteChatSession(id)
     return null
   })
 
   ipcMain.handle('chat:messages:list', (_event, sessionId: string) => {
     return listChatMessages(sessionId)
+  })
+
+  ipcMain.handle('chat:pty:attach', (event, sessionId: string, cols: number, rows: number) => {
+    return chatPtyManager.attach(sessionId, event.sender, cols, rows)
+  })
+
+  ipcMain.handle('chat:pty:detach', (event, sessionId: string) => {
+    chatPtyManager.detach(sessionId, event.sender)
+    return null
+  })
+
+  ipcMain.handle('chat:pty:write', (_event, sessionId: string, data: string) => {
+    chatPtyManager.write(sessionId, data)
+    return null
+  })
+
+  ipcMain.handle('chat:pty:resize', (_event, sessionId: string, cols: number, rows: number) => {
+    chatPtyManager.resize(sessionId, cols, rows)
+    return null
+  })
+
+  ipcMain.handle('chat:pty:interrupt', (_event, sessionId: string) => {
+    chatPtyManager.interrupt(sessionId)
+    return null
   })
 
   ipcMain.handle('project:open', async () => {

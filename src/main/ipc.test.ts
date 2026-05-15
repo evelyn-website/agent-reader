@@ -39,6 +39,18 @@ vi.mock('./project', () => ({
   flattenProjectFiles: vi.fn()
 }))
 
+vi.mock('./pty/manager', () => ({
+  chatPtyManager: {
+    attach: vi.fn(),
+    detach: vi.fn(),
+    write: vi.fn(),
+    resize: vi.fn(),
+    interrupt: vi.fn(),
+    kill: vi.fn(),
+    killAll: vi.fn()
+  }
+}))
+
 import { ipcMain, dialog } from 'electron'
 import { readFileSync } from 'fs'
 import * as db from './db'
@@ -72,6 +84,11 @@ describe('registerIpcHandlers', () => {
     expect(channels).toContain('chat:sessions:updateTitle')
     expect(channels).toContain('chat:sessions:delete')
     expect(channels).toContain('chat:messages:list')
+    expect(channels).toContain('chat:pty:attach')
+    expect(channels).toContain('chat:pty:detach')
+    expect(channels).toContain('chat:pty:write')
+    expect(channels).toContain('chat:pty:resize')
+    expect(channels).toContain('chat:pty:interrupt')
     expect(channels).toContain('project:open')
     expect(channels).toContain('project:scan')
     expect(channels).toContain('project:dashboard')

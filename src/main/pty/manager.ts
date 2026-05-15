@@ -1,0 +1,293 @@
+import { spawn as spawnPty, type IPty } from '@lydell/node-pty'
+import { existsSync, statSync } from 'fs'
+import { delimiter, join } from 'path'
+import type { WebContents } from 'electron'
+import { getChatSession } from '../db'
+import { resolveSessionCwd } from '../chat/cwd'
+
+const DEBUG = process.env.DEBUG_CHAT_PTY === '1'
+const debug = (...args: unknown[]): void => {
+  if (DEBUG) console.log('[chat:pty]', ...args)
+}
+
+const IDLE_TIMEOUT_MS = 10 * 60_000
+const REAPER_INTERVAL_MS = 60_000
+const DEFAULT_COLS = 80
+const DEFAULT_ROWS = 24
+
+interface PtyEntry {
+  pty: IPty
+  cwd: string
+  subscribers: Set<WebContents>
+  lastActivityAt: number
+  cols: number
+  rows: number
+}
+
+export interface AttachResult {
+  ok: true
+  pid: number
+  cols: number
+  rows: number
+}
+
+export interface AttachError {
+  ok: false
+  error: string
+}
+
+class ChatPtyManager {
+  private entries = new Map<string, PtyEntry>()
+  private reaperHandle: NodeJS.Timeout | null = null
+  private spawnImpl: typeof spawnPty = spawnPty
+  private claudeResolver: () => string | null = defaultResolveClaudeBinary
+
+  // Hooks for tests
+  setSpawnForTesting(impl: typeof spawnPty | null): void {
+    this.spawnImpl = impl ?? spawnPty
+  }
+  setBinaryResolverForTesting(resolver: (() => string | null) | null): void {
+    this.claudeResolver = resolver ?? defaultResolveClaudeBinary
+  }
+
+  attach(
+    sessionId: string,
+    webContents: WebContents,
+    cols: number,
+    rows: number
+  ): AttachResult | AttachError {
+    let entry = this.entries.get(sessionId)
+    if (!entry) {
+      const session = getChatSession(sessionId)
+      if (!session) return { ok: false, error: `Session ${sessionId} not found` }
+      const binary = this.claudeResolver()
+      if (!binary) {
+        return {
+          ok: false,
+          error: 'claude binary not found on PATH. Install with: npm i -g @anthropic-ai/claude-code'
+        }
+      }
+      const cwd = resolveSessionCwd(session)
+      const safeCols = sanitizeDim(cols, DEFAULT_COLS)
+      const safeRows = sanitizeDim(rows, DEFAULT_ROWS)
+      const env = buildSpawnEnv()
+      let pty: IPty
+      debug(
+        `spawning ${binary} cwd=${cwd} cols=${safeCols} rows=${safeRows} sessionId=${sessionId}`
+      )
+      try {
+        pty = this.spawnImpl(binary, [], {
+          name: 'xterm-256color',
+          cols: safeCols,
+          rows: safeRows,
+          cwd,
+          env
+        })
+      } catch (err) {
+        console.error('[chat:pty] spawn failed', err)
+        // always log spawn failures regardless of DEBUG flag
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : 'Failed to spawn claude'
+        }
+      }
+      entry = {
+        pty,
+        cwd,
+        subscribers: new Set(),
+        lastActivityAt: Date.now(),
+        cols: safeCols,
+        rows: safeRows
+      }
+      this.entries.set(sessionId, entry)
+
+      debug(`spawned pid=${pty.pid} sessionId=${sessionId}`)
+      let firstData = true
+      pty.onData((data) => {
+        if (firstData) {
+          firstData = false
+          debug(
+            `first data sessionId=${sessionId} bytes=${data.length} subscribers=${
+              this.entries.get(sessionId)?.subscribers.size ?? 0
+            }`
+          )
+        }
+        const live = this.entries.get(sessionId)
+        if (!live) return
+        live.lastActivityAt = Date.now()
+        for (const wc of live.subscribers) {
+          if (!wc.isDestroyed()) wc.send('chat:pty:data', { sessionId, data })
+        }
+      })
+      pty.onExit(({ exitCode, signal }) => {
+        debug(`exit sessionId=${sessionId} code=${exitCode} signal=${signal}`)
+        const live = this.entries.get(sessionId)
+        if (!live) return
+        for (const wc of live.subscribers) {
+          if (!wc.isDestroyed()) wc.send('chat:pty:exit', { sessionId, exitCode, signal })
+        }
+        this.entries.delete(sessionId)
+      })
+      this.startReaperIfNeeded()
+    } else {
+      const safeCols = sanitizeDim(cols, entry.cols)
+      const safeRows = sanitizeDim(rows, entry.rows)
+      if (safeCols !== entry.cols || safeRows !== entry.rows) {
+        try {
+          entry.pty.resize(safeCols, safeRows)
+        } catch {
+          // ignore
+        }
+        entry.cols = safeCols
+        entry.rows = safeRows
+      }
+    }
+
+    entry.subscribers.add(webContents)
+    const onDestroyed = (): void => {
+      const live = this.entries.get(sessionId)
+      if (live) live.subscribers.delete(webContents)
+    }
+    webContents.once('destroyed', onDestroyed)
+
+    return { ok: true, pid: entry.pty.pid, cols: entry.cols, rows: entry.rows }
+  }
+
+  detach(sessionId: string, webContents: WebContents): void {
+    const entry = this.entries.get(sessionId)
+    if (!entry) return
+    entry.subscribers.delete(webContents)
+  }
+
+  write(sessionId: string, data: string): void {
+    const entry = this.entries.get(sessionId)
+    if (!entry) return
+    entry.lastActivityAt = Date.now()
+    entry.pty.write(data)
+  }
+
+  resize(sessionId: string, cols: number, rows: number): void {
+    const entry = this.entries.get(sessionId)
+    if (!entry) return
+    const safeCols = sanitizeDim(cols, entry.cols)
+    const safeRows = sanitizeDim(rows, entry.rows)
+    if (safeCols === entry.cols && safeRows === entry.rows) return
+    try {
+      entry.pty.resize(safeCols, safeRows)
+      entry.cols = safeCols
+      entry.rows = safeRows
+    } catch {
+      // ignore transient resize failure (e.g. process exited)
+    }
+  }
+
+  interrupt(sessionId: string): void {
+    const entry = this.entries.get(sessionId)
+    if (!entry) return
+    entry.lastActivityAt = Date.now()
+    entry.pty.write('\x03')
+  }
+
+  kill(sessionId: string): void {
+    const entry = this.entries.get(sessionId)
+    if (!entry) return
+    this.entries.delete(sessionId)
+    forceKill(entry.pty)
+  }
+
+  killAll(): void {
+    for (const [id, entry] of this.entries) {
+      this.entries.delete(id)
+      forceKill(entry.pty)
+    }
+    if (this.reaperHandle) {
+      clearInterval(this.reaperHandle)
+      this.reaperHandle = null
+    }
+  }
+
+  isActive(sessionId: string): boolean {
+    return this.entries.has(sessionId)
+  }
+
+  reapIdle(now = Date.now()): void {
+    for (const [id, entry] of this.entries) {
+      if (entry.subscribers.size > 0) continue
+      if (now - entry.lastActivityAt < IDLE_TIMEOUT_MS) continue
+      this.entries.delete(id)
+      forceKill(entry.pty)
+    }
+  }
+
+  private startReaperIfNeeded(): void {
+    if (this.reaperHandle) return
+    this.reaperHandle = setInterval(() => this.reapIdle(), REAPER_INTERVAL_MS)
+    // Don't keep the event loop alive for the reaper
+    if (typeof this.reaperHandle.unref === 'function') this.reaperHandle.unref()
+  }
+}
+
+function sanitizeDim(value: number, fallback: number): number {
+  if (!Number.isFinite(value) || value <= 0) return fallback
+  return Math.max(1, Math.min(1000, Math.floor(value)))
+}
+
+function buildSpawnEnv(): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [key, val] of Object.entries(process.env)) {
+    if (val === undefined) continue
+    if (key === 'ELECTRON_RUN_AS_NODE') continue
+    out[key] = val
+  }
+  out.TERM = 'xterm-256color'
+  out.COLORTERM = 'truecolor'
+  out.FORCE_COLOR = '1'
+  return out
+}
+
+function defaultResolveClaudeBinary(): string | null {
+  const override = process.env.CLAUDE_BINARY_PATH
+  if (override && isExecutable(override)) return override
+
+  const pathEntries = (process.env.PATH ?? '').split(delimiter).filter(Boolean)
+  // Prepend common user-local install dirs that GUI Electron apps may miss
+  const extras = [
+    join(process.env.HOME ?? '', '.local/bin'),
+    join(process.env.HOME ?? '', '.npm-global/bin'),
+    '/opt/homebrew/bin',
+    '/usr/local/bin'
+  ].filter(Boolean)
+  for (const dir of [...extras, ...pathEntries]) {
+    const candidate = join(dir, 'claude')
+    if (isExecutable(candidate)) return candidate
+  }
+  return null
+}
+
+function isExecutable(path: string): boolean {
+  try {
+    return existsSync(path) && statSync(path).isFile()
+  } catch {
+    return false
+  }
+}
+
+function forceKill(pty: IPty): void {
+  try {
+    pty.kill('SIGTERM')
+  } catch {
+    // ignore
+  }
+  const pid = pty.pid
+  setTimeout(() => {
+    try {
+      process.kill(pid, 0)
+      pty.kill('SIGKILL')
+    } catch {
+      // already gone
+    }
+  }, 2000).unref?.()
+}
+
+export const chatPtyManager = new ChatPtyManager()
+export { ChatPtyManager }

@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+
+vi.mock('./ChatTerminal', () => ({
+  default: (props: { sessionId: string }) => (
+    <div data-testid="chat-terminal-stub">terminal:{props.sessionId}</div>
+  )
+}))
+
 import ChatTabContent from './ChatTabContent'
 import type { ChatSessionRow, ChatSessionSummary } from '../../../shared/dbTypes'
 

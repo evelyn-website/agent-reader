@@ -21,6 +21,15 @@ beforeEach(() => {
       },
       messages: {
         list: vi.fn().mockResolvedValue([])
+      },
+      pty: {
+        attach: vi.fn().mockResolvedValue({ ok: true, pid: 1, cols: 80, rows: 24 }),
+        detach: vi.fn().mockResolvedValue(null),
+        write: vi.fn().mockResolvedValue(null),
+        resize: vi.fn().mockResolvedValue(null),
+        interrupt: vi.fn().mockResolvedValue(null),
+        onData: vi.fn(() => () => {}),
+        onExit: vi.fn(() => () => {})
       }
     },
     project: {

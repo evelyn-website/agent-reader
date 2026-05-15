@@ -16,6 +16,13 @@ import type { ProjectScan } from '../main/project'
 
 export type ReadPdfResult = { data: Buffer; document: DocumentRow }
 
+export type PtyAttachResult =
+  | { ok: true; pid: number; cols: number; rows: number }
+  | { ok: false; error: string }
+
+export type PtyDataEvent = { sessionId: string; data: string }
+export type PtyExitEvent = { sessionId: string; exitCode: number; signal?: number }
+
 const api = {
   openPdf: (): Promise<string | null> => ipcRenderer.invoke('pdf:open'),
   readPdf: (filePath: string): Promise<ReadPdfResult> => ipcRenderer.invoke('pdf:read', filePath),
@@ -41,6 +48,30 @@ const api = {
     messages: {
       list: (sessionId: string): Promise<ChatMessageRow[]> =>
         ipcRenderer.invoke('chat:messages:list', sessionId)
+    },
+    pty: {
+      attach: (sessionId: string, cols: number, rows: number): Promise<PtyAttachResult> =>
+        ipcRenderer.invoke('chat:pty:attach', sessionId, cols, rows),
+      detach: (sessionId: string): Promise<null> =>
+        ipcRenderer.invoke('chat:pty:detach', sessionId),
+      write: (sessionId: string, data: string): Promise<null> =>
+        ipcRenderer.invoke('chat:pty:write', sessionId, data),
+      resize: (sessionId: string, cols: number, rows: number): Promise<null> =>
+        ipcRenderer.invoke('chat:pty:resize', sessionId, cols, rows),
+      interrupt: (sessionId: string): Promise<null> =>
+        ipcRenderer.invoke('chat:pty:interrupt', sessionId),
+      onData: (handler: (event: PtyDataEvent) => void): (() => void) => {
+        const listener = (_e: Electron.IpcRendererEvent, payload: PtyDataEvent): void =>
+          handler(payload)
+        ipcRenderer.on('chat:pty:data', listener)
+        return () => ipcRenderer.removeListener('chat:pty:data', listener)
+      },
+      onExit: (handler: (event: PtyExitEvent) => void): (() => void) => {
+        const listener = (_e: Electron.IpcRendererEvent, payload: PtyExitEvent): void =>
+          handler(payload)
+        ipcRenderer.on('chat:pty:exit', listener)
+        return () => ipcRenderer.removeListener('chat:pty:exit', listener)
+      }
     }
   },
   project: {

@@ -4,10 +4,12 @@ import {
   useMemo,
   useRef,
   useState,
-  type PointerEvent as ReactPointerEvent
+  type PointerEvent as ReactPointerEvent,
+  type Ref
 } from 'react'
 import type { ChatSessionRow, ChatSessionSummary } from '../../../shared/dbTypes'
 import { formatRelativeTime } from './marksTabUtils'
+import ChatTerminal, { type ChatTerminalHandle } from './ChatTerminal'
 
 interface Props {
   projectPath: string | null
@@ -16,6 +18,7 @@ interface Props {
   selectedSessionId: string | null
   onSelectSession: (sessionId: string | null) => void
   newSessionSignal?: number
+  terminalRef?: Ref<ChatTerminalHandle>
 }
 
 function sessionToSummary(session: ChatSessionRow): ChatSessionSummary {
@@ -41,7 +44,8 @@ export default function ChatTabContent({
   currentPage,
   selectedSessionId,
   onSelectSession,
-  newSessionSignal = 0
+  newSessionSignal = 0,
+  terminalRef
 }: Props): React.JSX.Element {
   const scopeKey = useMemo(() => {
     if (projectPath) return projectPath
@@ -238,9 +242,11 @@ export default function ChatTabContent({
       </div>
       <div className="chat-tab__body">
         {error && <div className="chat-tab__error">{error}</div>}
-        <div className="chat-tab__placeholder">
-          {selectedSession ? 'Terminal coming soon' : 'Create or select a session to begin.'}
-        </div>
+        {selectedSession ? (
+          <ChatTerminal key={selectedSession.id} ref={terminalRef} sessionId={selectedSession.id} />
+        ) : (
+          <div className="chat-tab__placeholder">Create or select a session to begin.</div>
+        )}
       </div>
       <div
         className="chat-tab__sessions"

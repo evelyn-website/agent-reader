@@ -35,6 +35,23 @@ declare global {
         messages: {
           list: (sessionId: string) => Promise<ChatMessageRow[]>
         }
+        pty: {
+          attach: (
+            sessionId: string,
+            cols: number,
+            rows: number
+          ) => Promise<
+            { ok: true; pid: number; cols: number; rows: number } | { ok: false; error: string }
+          >
+          detach: (sessionId: string) => Promise<null>
+          write: (sessionId: string, data: string) => Promise<null>
+          resize: (sessionId: string, cols: number, rows: number) => Promise<null>
+          interrupt: (sessionId: string) => Promise<null>
+          onData: (handler: (event: { sessionId: string; data: string }) => void) => () => void
+          onExit: (
+            handler: (event: { sessionId: string; exitCode: number; signal?: number }) => void
+          ) => () => void
+        }
       }
       project: {
         open: () => Promise<string | null>

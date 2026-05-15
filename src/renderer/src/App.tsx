@@ -6,6 +6,7 @@ import SidePanel, { type SidePanelTab } from './components/SidePanel'
 import OutlineTabContent from './components/OutlineTabContent'
 import FilesTabContent from './components/FilesTabContent'
 import ChatTabContent from './components/ChatTabContent'
+import type { ChatTerminalHandle } from './components/ChatTerminal'
 import MarksTabContent from './components/MarksTabContent'
 import EmptyLauncher from './components/EmptyLauncher'
 import ProjectDashboard from './components/ProjectDashboard'
@@ -32,6 +33,11 @@ export default function App(): React.JSX.Element {
   } = useSidePanels()
   const [selectedChatSessionId, setSelectedChatSessionId] = useState<string | null>(null)
   const [newSessionSignal, setNewSessionSignal] = useState(0)
+  const chatTerminalRef = useRef<ChatTerminalHandle | null>(null)
+  const selectedChatSessionIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    selectedChatSessionIdRef.current = selectedChatSessionId
+  }, [selectedChatSessionId])
   const {
     pdf,
     viewerReady,
@@ -101,6 +107,26 @@ export default function App(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [focusRightTab])
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!e.metaKey || e.altKey || e.ctrlKey || e.shiftKey) return
+      if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault()
+        focusRightTab('chat')
+        chatTerminalRef.current?.focus()
+        return
+      }
+      if (e.key === '.') {
+        const id = selectedChatSessionIdRef.current
+        if (!id) return
+        e.preventDefault()
+        void window.api.chat.pty.interrupt(id)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [focusRightTab])
+
   const leftTabs: SidePanelTab[] = [
     {
       id: 'files',
@@ -137,6 +163,7 @@ export default function App(): React.JSX.Element {
           selectedSessionId={selectedChatSessionId}
           onSelectSession={setSelectedChatSessionId}
           newSessionSignal={newSessionSignal}
+          terminalRef={chatTerminalRef}
         />
       )
     },
