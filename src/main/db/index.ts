@@ -5,6 +5,7 @@ import Database from 'better-sqlite3'
 import { runMigrations } from './migrations'
 import type {
   AnnotationRow,
+  ChatMessageRole,
   ChatMessageRow,
   ChatSessionRow,
   ChatSessionSummary,
@@ -167,6 +168,59 @@ export function updateChatSessionTitle(id: string, title: string): ChatSessionRo
 
 export function deleteChatSession(id: string): void {
   getDb().prepare(`DELETE FROM chat_sessions WHERE id = ?`).run(id)
+}
+
+export function setChatSessionClaudeId(id: string, claudeId: string): ChatSessionRow | null {
+  const d = getDb()
+  const existing = getChatSession(id)
+  if (!existing) return null
+  d.prepare(`UPDATE chat_sessions SET claude_session_id = ?, updated_at = ? WHERE id = ?`).run(
+    claudeId,
+    Date.now(),
+    id
+  )
+  return d.prepare<[string], ChatSessionRow>(`SELECT * FROM chat_sessions WHERE id = ?`).get(id)!
+}
+
+export interface UpsertJsonlMessageInput {
+  session_id: string
+  jsonl_uuid: string
+  role: ChatMessageRole
+  content: string
+  created_at: number
+}
+
+export function upsertChatMessageFromJsonl(input: UpsertJsonlMessageInput): {
+  inserted: boolean
+  row: ChatMessageRow
+} {
+  const d = getDb()
+  const existing = d
+    .prepare<
+      [string, string],
+      ChatMessageRow
+    >(`SELECT * FROM chat_messages WHERE session_id = ? AND jsonl_uuid = ?`)
+    .get(input.session_id, input.jsonl_uuid)
+  if (existing) return { inserted: false, row: existing }
+  const id = randomUUID()
+  const now = Date.now()
+  const tx = d.transaction(() => {
+    d.prepare(
+      `INSERT INTO chat_messages
+        (id, session_id, role, content, status, created_at, updated_at, error_text, jsonl_uuid)
+       VALUES (?, ?, ?, ?, 'complete', ?, ?, NULL, ?)`
+    ).run(id, input.session_id, input.role, input.content, input.created_at, now, input.jsonl_uuid)
+    d.prepare(`UPDATE chat_sessions SET updated_at = ?, last_message_at = ? WHERE id = ?`).run(
+      now,
+      input.created_at,
+      input.session_id
+    )
+  })
+  tx()
+  const row = d
+    .prepare<[string], ChatMessageRow>(`SELECT * FROM chat_messages WHERE id = ?`)
+    .get(id)!
+  return { inserted: true, row }
 }
 
 export function listChatMessages(sessionId: string): ChatMessageRow[] {

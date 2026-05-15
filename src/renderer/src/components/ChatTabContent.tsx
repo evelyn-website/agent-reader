@@ -117,6 +117,15 @@ export default function ChatTabContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeKey])
 
+  useEffect(() => {
+    if (!scopeKey) return
+    const off = window.api.chat.sessions.onChanged((event) => {
+      if (event.scopeKey !== scopeKey) return
+      void refreshSessions()
+    })
+    return off
+  }, [refreshSessions, scopeKey])
+
   const handleCreateSession = useCallback(async (): Promise<void> => {
     setError(null)
     try {

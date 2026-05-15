@@ -12,6 +12,8 @@ import {
   deleteChatSession,
   listChatMessages,
   createChatMessage,
+  setChatSessionClaudeId,
+  upsertChatMessageFromJsonl,
   createAnnotation,
   listAnnotations,
   updateAnnotation,
@@ -170,6 +172,76 @@ describe('chat sessions', () => {
 
     const renamed = updateChatSessionTitle(noTitle.id, '  \n  ')
     expect(renamed?.title).toBe('New session')
+  })
+
+  it('setChatSessionClaudeId persists and returns the updated row, no-ops on missing id', () => {
+    const session = createChatSession({ scope_key: '/project' })
+    const updated = setChatSessionClaudeId(session.id, 'claude-uuid-1')
+    expect(updated?.claude_session_id).toBe('claude-uuid-1')
+    expect(getChatSession(session.id)?.claude_session_id).toBe('claude-uuid-1')
+
+    expect(setChatSessionClaudeId('does-not-exist', 'x')).toBeNull()
+  })
+
+  it('upsertChatMessageFromJsonl inserts, dedupes by (session_id, jsonl_uuid), bumps last_message_at', () => {
+    const session = createChatSession({ scope_key: '/project' })
+
+    const first = upsertChatMessageFromJsonl({
+      session_id: session.id,
+      jsonl_uuid: 'u1',
+      role: 'user',
+      content: 'hello',
+      created_at: 1000
+    })
+    expect(first.inserted).toBe(true)
+    expect(first.row.jsonl_uuid).toBe('u1')
+    expect(getChatSession(session.id)?.last_message_at).toBe(1000)
+
+    const dupe = upsertChatMessageFromJsonl({
+      session_id: session.id,
+      jsonl_uuid: 'u1',
+      role: 'user',
+      content: 'hello (again)',
+      created_at: 9999
+    })
+    expect(dupe.inserted).toBe(false)
+    // existing row returned, last_message_at unchanged
+    expect(dupe.row.id).toBe(first.row.id)
+    expect(getChatSession(session.id)?.last_message_at).toBe(1000)
+
+    upsertChatMessageFromJsonl({
+      session_id: session.id,
+      jsonl_uuid: 'u2',
+      role: 'assistant',
+      content: 'reply',
+      created_at: 2000
+    })
+    expect(listChatMessages(session.id)).toHaveLength(2)
+    expect(getChatSession(session.id)?.last_message_at).toBe(2000)
+  })
+
+  it('upsertChatMessageFromJsonl scopes dedupe per session — same jsonl_uuid is allowed across sessions', () => {
+    const a = createChatSession({ scope_key: '/p' })
+    const b = createChatSession({ scope_key: '/p' })
+
+    expect(
+      upsertChatMessageFromJsonl({
+        session_id: a.id,
+        jsonl_uuid: 'shared',
+        role: 'user',
+        content: 'a',
+        created_at: 1
+      }).inserted
+    ).toBe(true)
+    expect(
+      upsertChatMessageFromJsonl({
+        session_id: b.id,
+        jsonl_uuid: 'shared',
+        role: 'user',
+        content: 'b',
+        created_at: 2
+      }).inserted
+    ).toBe(true)
   })
 })
 

@@ -3,11 +3,35 @@ import { EventEmitter } from 'events'
 
 vi.mock('../db', () => ({
   getChatSession: vi.fn(),
-  getDocument: vi.fn()
+  getDocument: vi.fn(),
+  setChatSessionClaudeId: vi.fn(() => null)
 }))
 
 vi.mock('../chat/cwd', () => ({
   resolveSessionCwd: vi.fn(() => '/tmp')
+}))
+
+vi.mock('../chat/sessionIdChannel', () => ({
+  reserveSessionId: vi.fn((sessionId: string) => ({
+    filePath: `/tmp/agent-reader-test-${sessionId}.id`,
+    release: vi.fn()
+  }))
+}))
+
+vi.mock('../chat/jsonlHydrator', () => ({
+  startJsonlHydrator: vi.fn(),
+  stopJsonlHydrator: vi.fn(),
+  adoptClaudeSessionId: vi.fn(),
+  stopAllJsonlHydrators: vi.fn()
+}))
+
+vi.mock('../chat/broadcast', () => ({
+  broadcastSessionsChanged: vi.fn()
+}))
+
+vi.mock('../chat/hookScript', () => ({
+  getHookNodePath: vi.fn(() => 'node'),
+  getHookScriptPath: vi.fn(() => '/tmp/hook.js')
 }))
 
 import { ChatPtyManager } from './manager'
@@ -24,16 +48,25 @@ interface FakePty {
   killSignal: string | null
 }
 
+interface SpawnCall {
+  file: string
+  args: string[]
+  opts: { cols?: number; rows?: number; env?: Record<string, string> }
+}
+
 function makeFakeSpawn(): {
   spawn: (file: string, args: string[], opts: { cols?: number; rows?: number }) => unknown
   ptys: FakePty[]
+  calls: SpawnCall[]
 } {
   const ptys: FakePty[] = []
+  const calls: SpawnCall[] = []
   const spawn = (
-    _file: string,
-    _args: string[],
-    opts: { cols?: number; rows?: number }
+    file: string,
+    args: string[],
+    opts: { cols?: number; rows?: number; env?: Record<string, string> }
   ): unknown => {
+    calls.push({ file, args: [...args], opts })
     const dataEmitter = new EventEmitter()
     const exitEmitter = new EventEmitter()
     const fake: FakePty = {
@@ -80,7 +113,7 @@ function makeFakeSpawn(): {
     ptys.push(fake)
     return pty
   }
-  return { spawn: spawn as never, ptys }
+  return { spawn: spawn as never, ptys, calls }
 }
 
 function makeWebContents(): {
@@ -202,6 +235,48 @@ describe('ChatPtyManager', () => {
     const future = Date.now() + 11 * 60_000
     manager.reapIdle(future)
     expect(manager.isActive('s1')).toBe(true)
+  })
+
+  it('passes --settings JSON with a SessionStart hook and AGENT_READER_SESSION_ID_FILE env on first spawn', () => {
+    const wc = makeWebContents()
+    const result = manager.attach('s1', wc as never, 80, 24)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.resumed).toBe(false)
+
+    const call = spawnHarness.calls[0]
+    const settingsIdx = call.args.indexOf('--settings')
+    expect(settingsIdx).toBeGreaterThanOrEqual(0)
+    const settings = JSON.parse(call.args[settingsIdx + 1])
+    expect(settings.hooks.SessionStart[0].hooks[0].type).toBe('command')
+    expect(settings.hooks.SessionStart[0].hooks[0].command).toContain('hook.js')
+
+    expect(call.opts.env?.AGENT_READER_SESSION_ID_FILE).toMatch(/agent-reader-test-s1\.id$/)
+    // No --resume on a fresh session.
+    expect(call.args).not.toContain('--resume')
+  })
+
+  it('adds --resume <claudeId> when the session row already has a claude_session_id', () => {
+    vi.mocked(db.getChatSession).mockReturnValueOnce({
+      id: 's1',
+      scope_key: '/project',
+      title: 't',
+      origin_document_id: null,
+      origin_page_number: null,
+      origin_text_excerpt: null,
+      claude_session_id: 'resumed-uuid-7',
+      created_at: 0,
+      updated_at: 0,
+      last_message_at: null
+    } as never)
+    const wc = makeWebContents()
+    const result = manager.attach('s1', wc as never, 80, 24)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.resumed).toBe(true)
+
+    const args = spawnHarness.calls[0].args
+    const resumeIdx = args.indexOf('--resume')
+    expect(resumeIdx).toBeGreaterThanOrEqual(0)
+    expect(args[resumeIdx + 1]).toBe('resumed-uuid-7')
   })
 
   it('cleans up the entry when the pty exits on its own', () => {

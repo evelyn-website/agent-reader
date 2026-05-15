@@ -31,6 +31,9 @@ declare global {
           create: (input: CreateChatSessionInput) => Promise<ChatSessionRow>
           updateTitle: (id: string, title: string) => Promise<ChatSessionRow | null>
           delete: (id: string) => Promise<null>
+          onChanged: (
+            handler: (event: { sessionId: string; scopeKey: string }) => void
+          ) => () => void
         }
         messages: {
           list: (sessionId: string) => Promise<ChatMessageRow[]>
@@ -41,7 +44,8 @@ declare global {
             cols: number,
             rows: number
           ) => Promise<
-            { ok: true; pid: number; cols: number; rows: number } | { ok: false; error: string }
+            | { ok: true; pid: number; cols: number; rows: number; resumed: boolean }
+            | { ok: false; error: string }
           >
           detach: (sessionId: string) => Promise<null>
           write: (sessionId: string, data: string) => Promise<null>

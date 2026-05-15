@@ -73,17 +73,25 @@ export function useProjectSession({
   useEffect(() => {
     if (!project || pdf) return
     let cancelled = false
-    window.api.project
-      .dashboard(project)
-      .then((dashboard) => {
-        if (!cancelled) setProjectDashboard(dashboard)
-      })
-      .catch((err) => console.error('project dashboard failed:', err))
-      .finally(() => {
-        if (!cancelled) setProjectDashboardLoading(false)
-      })
+    const load = (): void => {
+      window.api.project
+        .dashboard(project)
+        .then((dashboard) => {
+          if (!cancelled) setProjectDashboard(dashboard)
+        })
+        .catch((err) => console.error('project dashboard failed:', err))
+        .finally(() => {
+          if (!cancelled) setProjectDashboardLoading(false)
+        })
+    }
+    load()
+    const off = window.api.chat.sessions.onChanged((event) => {
+      if (event.scopeKey !== project.path) return
+      load()
+    })
     return () => {
       cancelled = true
+      off()
     }
   }, [pdf, project])
 

@@ -17,11 +17,12 @@ import type { ProjectScan } from '../main/project'
 export type ReadPdfResult = { data: Buffer; document: DocumentRow }
 
 export type PtyAttachResult =
-  | { ok: true; pid: number; cols: number; rows: number }
+  | { ok: true; pid: number; cols: number; rows: number; resumed: boolean }
   | { ok: false; error: string }
 
 export type PtyDataEvent = { sessionId: string; data: string }
 export type PtyExitEvent = { sessionId: string; exitCode: number; signal?: number }
+export type SessionsChangedEvent = { sessionId: string; scopeKey: string }
 
 const api = {
   openPdf: (): Promise<string | null> => ipcRenderer.invoke('pdf:open'),
@@ -43,7 +44,13 @@ const api = {
         ipcRenderer.invoke('chat:sessions:create', input),
       updateTitle: (id: string, title: string): Promise<ChatSessionRow | null> =>
         ipcRenderer.invoke('chat:sessions:updateTitle', id, title),
-      delete: (id: string): Promise<null> => ipcRenderer.invoke('chat:sessions:delete', id)
+      delete: (id: string): Promise<null> => ipcRenderer.invoke('chat:sessions:delete', id),
+      onChanged: (handler: (event: SessionsChangedEvent) => void): (() => void) => {
+        const listener = (_e: Electron.IpcRendererEvent, payload: SessionsChangedEvent): void =>
+          handler(payload)
+        ipcRenderer.on('chat:sessions:changed', listener)
+        return () => ipcRenderer.removeListener('chat:sessions:changed', listener)
+      }
     },
     messages: {
       list: (sessionId: string): Promise<ChatMessageRow[]> =>

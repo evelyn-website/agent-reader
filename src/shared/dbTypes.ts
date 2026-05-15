@@ -38,6 +38,7 @@ export interface ChatMessageRow {
   created_at: number
   updated_at: number
   error_text: string | null
+  jsonl_uuid: string | null
 }
 
 export interface CreateChatSessionInput {

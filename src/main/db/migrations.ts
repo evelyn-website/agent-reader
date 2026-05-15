@@ -96,6 +96,14 @@ const migrations: Migration[] = [
       CREATE INDEX idx_chat_messages_session_created
         ON chat_messages(session_id, created_at);
     `)
+  },
+  (db) => {
+    db.exec(`
+      ALTER TABLE chat_messages ADD COLUMN jsonl_uuid TEXT;
+      CREATE UNIQUE INDEX idx_chat_messages_jsonl_uuid
+        ON chat_messages(session_id, jsonl_uuid)
+        WHERE jsonl_uuid IS NOT NULL;
+    `)
   }
 ]
 

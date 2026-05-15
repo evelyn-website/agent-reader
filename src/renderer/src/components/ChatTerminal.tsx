@@ -76,7 +76,8 @@ function ChatTerminalInner(
     queueMicrotask(() => term.focus())
 
     const cached = bufferCache.get(sessionId)
-    if (cached) term.write(cached)
+    // Cache replay is delayed until attach() reports whether we're resuming.
+    // On --resume claude repaints context itself, so replaying would double-render.
 
     try {
       const webgl = new WebglAddon()
@@ -106,6 +107,11 @@ function ChatTerminalInner(
       if (!result.ok) {
         setError(result.error)
         return
+      }
+      if (result.resumed) {
+        bufferCache.delete(sessionId)
+      } else if (cached) {
+        term.write(cached)
       }
       attached = true
     }

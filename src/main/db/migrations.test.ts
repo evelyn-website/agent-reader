@@ -43,14 +43,14 @@ describe('runMigrations', () => {
   it('sets schema_version to the total migration count', () => {
     runMigrations(db)
     const row = db.prepare(`SELECT version FROM schema_version`).get() as { version: number }
-    expect(row.version).toBe(6)
+    expect(row.version).toBe(7)
   })
 
   it('is idempotent — re-running leaves version unchanged', () => {
     runMigrations(db)
     runMigrations(db)
     const row = db.prepare(`SELECT version FROM schema_version`).get() as { version: number }
-    expect(row.version).toBe(6)
+    expect(row.version).toBe(7)
   })
 
   it('projects upsert bumps open_count on conflict', () => {

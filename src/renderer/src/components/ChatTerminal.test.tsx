@@ -91,9 +91,7 @@ describe('ChatTerminal', () => {
     vi.mocked(WebglAddon).mockImplementation(
       () => ({ onContextLoss: vi.fn(), dispose: vi.fn() }) as never
     )
-    vi.mocked(SerializeAddon).mockImplementation(
-      () => ({ serialize: vi.fn(() => '') }) as never
-    )
+    vi.mocked(SerializeAddon).mockImplementation(() => ({ serialize: vi.fn(() => '') }) as never)
   })
 
   it('attaches to the pty with terminal dimensions and writes pty data into the terminal', async () => {

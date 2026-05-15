@@ -5,6 +5,8 @@ import icon from '../../resources/icon.png?asset'
 import { initDb } from './db'
 import { registerIpcHandlers } from './ipc'
 import { chatPtyManager } from './pty/manager'
+import { shutdownSessionIdChannel } from './chat/sessionIdChannel'
+import { stopAllJsonlHydrators } from './chat/jsonlHydrator'
 
 function createWindow(): void {
   // Create the browser window.
@@ -94,6 +96,8 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   chatPtyManager.killAll()
+  stopAllJsonlHydrators()
+  shutdownSessionIdChannel()
 })
 
 // In this file you can include the rest of your app's specific main process

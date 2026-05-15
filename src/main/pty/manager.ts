@@ -2,8 +2,12 @@ import { spawn as spawnPty, type IPty } from '@lydell/node-pty'
 import { existsSync, statSync } from 'fs'
 import { delimiter, join } from 'path'
 import type { WebContents } from 'electron'
-import { getChatSession } from '../db'
+import { getChatSession, setChatSessionClaudeId } from '../db'
 import { resolveSessionCwd } from '../chat/cwd'
+import { reserveSessionId, type SessionIdReservation } from '../chat/sessionIdChannel'
+import { adoptClaudeSessionId, startJsonlHydrator, stopJsonlHydrator } from '../chat/jsonlHydrator'
+import { broadcastSessionsChanged } from '../chat/broadcast'
+import { getHookNodePath, getHookScriptPath } from '../chat/hookScript'
 
 const DEBUG = process.env.DEBUG_CHAT_PTY === '1'
 const debug = (...args: unknown[]): void => {
@@ -22,6 +26,7 @@ interface PtyEntry {
   lastActivityAt: number
   cols: number
   rows: number
+  sessionIdReservation: SessionIdReservation | null
 }
 
 export interface AttachResult {
@@ -29,6 +34,7 @@ export interface AttachResult {
   pid: number
   cols: number
   rows: number
+  resumed: boolean
 }
 
 export interface AttachError {
@@ -57,6 +63,7 @@ class ChatPtyManager {
     rows: number
   ): AttachResult | AttachError {
     let entry = this.entries.get(sessionId)
+    let resumed = false
     if (!entry) {
       const session = getChatSession(sessionId)
       if (!session) return { ok: false, error: `Session ${sessionId} not found` }
@@ -70,13 +77,30 @@ class ChatPtyManager {
       const cwd = resolveSessionCwd(session)
       const safeCols = sanitizeDim(cols, DEFAULT_COLS)
       const safeRows = sanitizeDim(rows, DEFAULT_ROWS)
+
+      const reservation = reserveSessionId(sessionId, (claudeId) => {
+        const updated = setChatSessionClaudeId(sessionId, claudeId)
+        adoptClaudeSessionId(sessionId, claudeId)
+        if (updated) broadcastSessionsChanged({ sessionId, scopeKey: updated.scope_key })
+      })
+
       const env = buildSpawnEnv()
+      env.AGENT_READER_SESSION_ID_FILE = reservation.filePath
+
+      const settingsJson = buildSettingsJson()
+      const args: string[] = ['--settings', settingsJson]
+      if (session.claude_session_id) {
+        args.unshift('--resume', session.claude_session_id)
+        resumed = true
+      }
+
       let pty: IPty
       debug(
-        `spawning ${binary} cwd=${cwd} cols=${safeCols} rows=${safeRows} sessionId=${sessionId}`
+        `spawning ${binary} cwd=${cwd} cols=${safeCols} rows=${safeRows} ` +
+          `sessionId=${sessionId} resumed=${resumed} claudeId=${session.claude_session_id ?? '-'}`
       )
       try {
-        pty = this.spawnImpl(binary, [], {
+        pty = this.spawnImpl(binary, args, {
           name: 'xterm-256color',
           cols: safeCols,
           rows: safeRows,
@@ -86,6 +110,7 @@ class ChatPtyManager {
       } catch (err) {
         console.error('[chat:pty] spawn failed', err)
         // always log spawn failures regardless of DEBUG flag
+        reservation.release()
         return {
           ok: false,
           error: err instanceof Error ? err.message : 'Failed to spawn claude'
@@ -97,9 +122,24 @@ class ChatPtyManager {
         subscribers: new Set(),
         lastActivityAt: Date.now(),
         cols: safeCols,
-        rows: safeRows
+        rows: safeRows,
+        sessionIdReservation: reservation
       }
       this.entries.set(sessionId, entry)
+
+      startJsonlHydrator({
+        ourSessionId: sessionId,
+        cwd,
+        claudeSessionId: session.claude_session_id,
+        onClaudeIdDiscovered: (claudeId) => {
+          const updated = setChatSessionClaudeId(sessionId, claudeId)
+          if (updated) broadcastSessionsChanged({ sessionId, scopeKey: updated.scope_key })
+        },
+        onSessionChanged: () => {
+          const live = getChatSession(sessionId)
+          if (live) broadcastSessionsChanged({ sessionId, scopeKey: live.scope_key })
+        }
+      })
 
       debug(`spawned pid=${pty.pid} sessionId=${sessionId}`)
       let firstData = true
@@ -122,11 +162,14 @@ class ChatPtyManager {
       pty.onExit(({ exitCode, signal }) => {
         debug(`exit sessionId=${sessionId} code=${exitCode} signal=${signal}`)
         const live = this.entries.get(sessionId)
-        if (!live) return
-        for (const wc of live.subscribers) {
-          if (!wc.isDestroyed()) wc.send('chat:pty:exit', { sessionId, exitCode, signal })
+        if (live) {
+          for (const wc of live.subscribers) {
+            if (!wc.isDestroyed()) wc.send('chat:pty:exit', { sessionId, exitCode, signal })
+          }
+          live.sessionIdReservation?.release()
+          this.entries.delete(sessionId)
         }
-        this.entries.delete(sessionId)
+        stopJsonlHydrator(sessionId)
       })
       this.startReaperIfNeeded()
     } else {
@@ -150,7 +193,7 @@ class ChatPtyManager {
     }
     webContents.once('destroyed', onDestroyed)
 
-    return { ok: true, pid: entry.pty.pid, cols: entry.cols, rows: entry.rows }
+    return { ok: true, pid: entry.pty.pid, cols: entry.cols, rows: entry.rows, resumed }
   }
 
   detach(sessionId: string, webContents: WebContents): void {
@@ -192,12 +235,16 @@ class ChatPtyManager {
     const entry = this.entries.get(sessionId)
     if (!entry) return
     this.entries.delete(sessionId)
+    entry.sessionIdReservation?.release()
+    stopJsonlHydrator(sessionId)
     forceKill(entry.pty)
   }
 
   killAll(): void {
     for (const [id, entry] of this.entries) {
       this.entries.delete(id)
+      entry.sessionIdReservation?.release()
+      stopJsonlHydrator(id)
       forceKill(entry.pty)
     }
     if (this.reaperHandle) {
@@ -215,6 +262,8 @@ class ChatPtyManager {
       if (entry.subscribers.size > 0) continue
       if (now - entry.lastActivityAt < IDLE_TIMEOUT_MS) continue
       this.entries.delete(id)
+      entry.sessionIdReservation?.release()
+      stopJsonlHydrator(id)
       forceKill(entry.pty)
     }
   }
@@ -230,6 +279,24 @@ class ChatPtyManager {
 function sanitizeDim(value: number, fallback: number): number {
   if (!Number.isFinite(value) || value <= 0) return fallback
   return Math.max(1, Math.min(1000, Math.floor(value)))
+}
+
+function buildSettingsJson(): string {
+  const command = `${shellEscape(getHookNodePath())} ${shellEscape(getHookScriptPath())}`
+  return JSON.stringify({
+    hooks: {
+      SessionStart: [
+        {
+          hooks: [{ type: 'command', command }]
+        }
+      ]
+    }
+  })
+}
+
+function shellEscape(arg: string): string {
+  if (/^[A-Za-z0-9_\-./]+$/.test(arg)) return arg
+  return `'${arg.replace(/'/g, `'\\''`)}'`
 }
 
 function buildSpawnEnv(): Record<string, string> {
