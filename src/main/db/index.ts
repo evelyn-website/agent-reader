@@ -38,6 +38,14 @@ export type {
   UpdateAnnotationInput
 } from '../../shared/dbTypes'
 
+/**
+ * Placeholder title for newly-created chat sessions before the user names
+ * them (or before claude's auto-generated summary lands). Kept as an exported
+ * constant so the JSONL hydrator can decide whether a title is still default
+ * and safe to overwrite without clobbering a user-edited name.
+ */
+export const DEFAULT_CHAT_SESSION_TITLE = 'New session'
+
 let db: Database.Database | null = null
 
 export function createDb(dbPath: string): Database.Database {
@@ -137,7 +145,7 @@ export function createChatSession(input: CreateChatSessionInput): ChatSessionRow
   ).run(
     id,
     input.scope_key,
-    input.title?.trim() || 'New session',
+    input.title?.trim() || DEFAULT_CHAT_SESSION_TITLE,
     input.origin_document_id ?? null,
     input.origin_page_number ?? null,
     input.origin_text_excerpt ?? null,
@@ -159,11 +167,39 @@ export function updateChatSessionTitle(id: string, title: string): ChatSessionRo
   const existing = getChatSession(id)
   if (!existing) return null
   d.prepare(`UPDATE chat_sessions SET title = ?, updated_at = ? WHERE id = ?`).run(
-    title.trim() || 'New session',
+    title.trim() || DEFAULT_CHAT_SESSION_TITLE,
     Date.now(),
     id
   )
   return d.prepare<[string], ChatSessionRow>(`SELECT * FROM chat_sessions WHERE id = ?`).get(id)!
+}
+
+/**
+ * Apply an auto-generated title (e.g. claude's session summary) only when the
+ * current title is still the {@link DEFAULT_CHAT_SESSION_TITLE} placeholder.
+ * Returns the row whether or not it was actually updated; returns null only if
+ * the session does not exist. Whitespace-only or empty input is rejected.
+ */
+export function updateChatSessionTitleIfDefault(
+  id: string,
+  title: string
+): { row: ChatSessionRow; updated: boolean } | null {
+  const d = getDb()
+  const existing = getChatSession(id)
+  if (!existing) return null
+  const trimmed = title.trim()
+  if (!trimmed) return { row: existing, updated: false }
+  if (existing.title !== DEFAULT_CHAT_SESSION_TITLE) return { row: existing, updated: false }
+  if (existing.title === trimmed) return { row: existing, updated: false }
+  d.prepare(`UPDATE chat_sessions SET title = ?, updated_at = ? WHERE id = ?`).run(
+    trimmed,
+    Date.now(),
+    id
+  )
+  const row = d
+    .prepare<[string], ChatSessionRow>(`SELECT * FROM chat_sessions WHERE id = ?`)
+    .get(id)!
+  return { row, updated: true }
 }
 
 export function deleteChatSession(id: string): void {

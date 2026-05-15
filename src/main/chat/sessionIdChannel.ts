@@ -1,6 +1,7 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, watch, type FSWatcher } from 'fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'fs'
 import { join } from 'path'
+import { pollDirForNewEntries } from './dirPoll'
 
 const DEBUG = process.env.DEBUG_CHAT_PTY === '1'
 const debug = (...args: unknown[]): void => {
@@ -10,7 +11,7 @@ const debug = (...args: unknown[]): void => {
 const SUBDIR = 'chat-session-ids'
 
 let baseDir: string | null = null
-let dirWatcher: FSWatcher | null = null
+let stopDirPoll: (() => void) | null = null
 let initialized = false
 const pending = new Map<string, (claudeId: string) => void>()
 
@@ -39,22 +40,30 @@ function ensureInitialized(): void {
   } catch {
     // ignore — dir was just created
   }
-  dirWatcher = watch(dir, (_eventType, filename) => {
-    if (!filename) return
-    if (!filename.endsWith('.id')) return
-    const ourSessionId = filename.slice(0, -3)
-    const handler = pending.get(ourSessionId)
-    if (!handler) return
-    let raw: string
-    try {
-      raw = readFileSync(join(dir, filename), 'utf8').trim()
-    } catch {
-      return
+  // fs.watch on a directory is unreliable on macOS — the kqueue/FSEvents
+  // subscription wires up asynchronously, so the hook script writing the
+  // .id file fast can race ahead of the watcher. Poll instead.
+  // Baseline is empty because we just swept the dir clean above; any .id
+  // file we observe from here on is a new hook write.
+  stopDirPoll = pollDirForNewEntries({
+    dir,
+    suffix: '.id',
+    baseline: new Set(),
+    onNew: (filename) => {
+      const ourSessionId = filename.slice(0, -3)
+      const handler = pending.get(ourSessionId)
+      if (!handler) return
+      let raw: string
+      try {
+        raw = readFileSync(join(dir, filename), 'utf8').trim()
+      } catch {
+        return
+      }
+      if (!raw) return
+      debug(`captured claude session id ${raw} for ${ourSessionId} via hook`)
+      pending.delete(ourSessionId)
+      handler(raw)
     }
-    if (!raw) return
-    debug(`captured claude session id ${raw} for ${ourSessionId} via hook`)
-    pending.delete(ourSessionId)
-    handler(raw)
   })
 }
 
@@ -98,13 +107,13 @@ export function reserveSessionId(
 
 export function shutdownSessionIdChannel(): void {
   pending.clear()
-  if (dirWatcher) {
+  if (stopDirPoll) {
     try {
-      dirWatcher.close()
+      stopDirPoll()
     } catch {
       // ignore
     }
-    dirWatcher = null
+    stopDirPoll = null
   }
   initialized = false
   if (baseDir && existsSync(baseDir)) {

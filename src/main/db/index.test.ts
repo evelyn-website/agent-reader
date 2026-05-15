@@ -9,6 +9,7 @@ import {
   createChatSession,
   getChatSession,
   updateChatSessionTitle,
+  updateChatSessionTitleIfDefault,
   deleteChatSession,
   listChatMessages,
   createChatMessage,
@@ -172,6 +173,39 @@ describe('chat sessions', () => {
 
     const renamed = updateChatSessionTitle(noTitle.id, '  \n  ')
     expect(renamed?.title).toBe('New session')
+  })
+
+  it('updateChatSessionTitleIfDefault only overwrites the placeholder, leaves user titles alone', () => {
+    const fresh = createChatSession({ scope_key: '/project' })
+    expect(fresh.title).toBe('New session')
+
+    const first = updateChatSessionTitleIfDefault(fresh.id, 'Auto title from claude')
+    expect(first?.updated).toBe(true)
+    expect(first?.row.title).toBe('Auto title from claude')
+    expect(getChatSession(fresh.id)?.title).toBe('Auto title from claude')
+
+    // Second call must NOT clobber the now-non-default title, even if the
+    // caller insists on a different summary.
+    const second = updateChatSessionTitleIfDefault(fresh.id, 'A different summary')
+    expect(second?.updated).toBe(false)
+    expect(second?.row.title).toBe('Auto title from claude')
+    expect(getChatSession(fresh.id)?.title).toBe('Auto title from claude')
+
+    // User-renamed sessions are similarly protected, even when the user
+    // happens to revert the placeholder explicitly via updateChatSessionTitle
+    // — only the *current* value is consulted.
+    const named = createChatSession({ scope_key: '/project' })
+    updateChatSessionTitle(named.id, 'My chosen name')
+    const skipped = updateChatSessionTitleIfDefault(named.id, 'Auto title')
+    expect(skipped?.updated).toBe(false)
+    expect(getChatSession(named.id)?.title).toBe('My chosen name')
+
+    // Whitespace-only summary is rejected so we never accidentally write an
+    // empty title (which would otherwise reset back to the placeholder).
+    const blankResult = updateChatSessionTitleIfDefault(fresh.id, '   \n  ')
+    expect(blankResult?.updated).toBe(false)
+
+    expect(updateChatSessionTitleIfDefault('does-not-exist', 'x')).toBeNull()
   })
 
   it('setChatSessionClaudeId persists and returns the updated row, no-ops on missing id', () => {

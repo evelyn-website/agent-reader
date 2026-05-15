@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, rmSync, writeFileSync, appendFileSync } from 'fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, appendFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import type Database from 'better-sqlite3'
 
 import {
@@ -7,7 +9,8 @@ import {
   setDbForTesting,
   createChatSession,
   listChatMessages,
-  getChatSession
+  getChatSession,
+  updateChatSessionTitle
 } from '../db'
 import {
   startJsonlHydrator,
@@ -18,10 +21,10 @@ import {
 import { claudeProjectDir, claudeTranscriptPath } from './claudeProjectDir'
 
 // Per-test sandbox cwd so each spec gets a fresh claudeProjectDir.
-let sandboxCounter = 0
+// mkdtempSync guarantees a unique cwd even under heavy parallelism, which
+// in turn guarantees a unique dashed name under ~/.claude/projects/.
 function freshSandboxCwd(): string {
-  sandboxCounter += 1
-  return `/tmp/agent-reader-hydrator-test-${process.pid}-${Date.now()}-${sandboxCounter}`
+  return mkdtempSync(join(tmpdir(), 'agent-reader-hydrator-cwd-'))
 }
 
 function transcriptLine(args: {
@@ -75,6 +78,11 @@ describe('jsonlHydrator', () => {
     db.close()
     try {
       rmSync(projectDir, { recursive: true, force: true })
+    } catch {
+      // ignore
+    }
+    try {
+      rmSync(sandboxCwd, { recursive: true, force: true })
     } catch {
       // ignore
     }
@@ -255,6 +263,123 @@ describe('jsonlHydrator', () => {
     await waitFor(() => listChatMessages(session.id).length > 1)
 
     expect(listChatMessages(session.id).map((r) => r.jsonl_uuid)).toEqual(['d1', 'd2'])
+  })
+
+  it('adopts a sessions-index.json summary as the session title when title is still default', async () => {
+    const session = createChatSession({ scope_key: '/p' })
+    expect(getChatSession(session.id)?.title).toBe('New session')
+
+    const claudeId = 'claude-uuid-summary-idx'
+    const path = claudeTranscriptPath(sandboxCwd, claudeId)
+    writeFileSync(path, transcriptLine({ uuid: 'm1', type: 'user', text: 'hello' }))
+
+    // sessions-index.json already contains a summary for this session.
+    writeFileSync(
+      join(projectDir, 'sessions-index.json'),
+      JSON.stringify({
+        version: 1,
+        entries: [
+          { sessionId: 'unrelated', summary: 'ignore me' },
+          { sessionId: claudeId, summary: 'Auto title from claude' }
+        ]
+      })
+    )
+
+    const changed = vi.fn()
+    startJsonlHydrator({
+      ourSessionId: session.id,
+      cwd: sandboxCwd,
+      claudeSessionId: claudeId,
+      onSessionChanged: changed
+    })
+
+    await waitFor(() => getChatSession(session.id)?.title === 'Auto title from claude')
+    expect(changed).toHaveBeenCalled()
+  })
+
+  it('does not clobber a user-edited title even when sessions-index.json offers a summary', async () => {
+    const session = createChatSession({ scope_key: '/p' })
+    updateChatSessionTitle(session.id, 'User chose this name')
+
+    const claudeId = 'claude-uuid-summary-user'
+    const path = claudeTranscriptPath(sandboxCwd, claudeId)
+    writeFileSync(path, transcriptLine({ uuid: 'm1', type: 'user', text: 'hello' }))
+    writeFileSync(
+      join(projectDir, 'sessions-index.json'),
+      JSON.stringify({
+        version: 1,
+        entries: [{ sessionId: claudeId, summary: 'Auto title that should be ignored' }]
+      })
+    )
+
+    const changed = vi.fn()
+    startJsonlHydrator({
+      ourSessionId: session.id,
+      cwd: sandboxCwd,
+      claudeSessionId: claudeId,
+      onSessionChanged: changed
+    })
+
+    // Wait for at least the user message to land so we know the watcher is
+    // running, then assert the title is still the user's choice.
+    await waitFor(() => listChatMessages(session.id).length > 0)
+    expect(getChatSession(session.id)?.title).toBe('User chose this name')
+  })
+
+  it('adopts a {"type":"summary"} JSONL line as the title (fallback for older claude formats)', async () => {
+    const session = createChatSession({ scope_key: '/p' })
+    const claudeId = 'claude-uuid-summary-jsonl'
+    const path = claudeTranscriptPath(sandboxCwd, claudeId)
+    writeFileSync(path, transcriptLine({ uuid: 'mA', type: 'user', text: 'hi' }))
+
+    const changed = vi.fn()
+    startJsonlHydrator({
+      ourSessionId: session.id,
+      cwd: sandboxCwd,
+      claudeSessionId: claudeId,
+      onSessionChanged: changed
+    })
+
+    await waitFor(() => listChatMessages(session.id).length > 0)
+
+    // Same race as the dedupe test below: watchFile needs a poll cycle to
+    // capture its size/mtime baseline; otherwise the append can land within
+    // the same stat snapshot and the change event is dropped.
+    await new Promise((r) => setTimeout(r, 350))
+    appendFileSync(
+      path,
+      JSON.stringify({ type: 'summary', summary: 'Summary from JSONL', leafUuid: 'mA' }) + '\n'
+    )
+
+    await waitFor(() => getChatSession(session.id)?.title === 'Summary from JSONL')
+  })
+
+  it('does not clobber a user-edited title even when a JSONL summary line arrives', async () => {
+    const session = createChatSession({ scope_key: '/p' })
+    updateChatSessionTitle(session.id, 'User chose this name')
+
+    const claudeId = 'claude-uuid-summary-jsonl-user'
+    const path = claudeTranscriptPath(sandboxCwd, claudeId)
+    writeFileSync(path, transcriptLine({ uuid: 'mA', type: 'user', text: 'hi' }))
+
+    const changed = vi.fn()
+    startJsonlHydrator({
+      ourSessionId: session.id,
+      cwd: sandboxCwd,
+      claudeSessionId: claudeId,
+      onSessionChanged: changed
+    })
+
+    await waitFor(() => listChatMessages(session.id).length > 0)
+    await new Promise((r) => setTimeout(r, 350))
+    appendFileSync(
+      path,
+      JSON.stringify({ type: 'summary', summary: 'Auto title that should be ignored' }) + '\n'
+    )
+
+    // Give the watcher a generous poll window to deliver the append.
+    await new Promise((r) => setTimeout(r, 600))
+    expect(getChatSession(session.id)?.title).toBe('User chose this name')
   })
 
   it('adoptClaudeSessionId switches the entry from snapshot discovery to direct tail', async () => {
