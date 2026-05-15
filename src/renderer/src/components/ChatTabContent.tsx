@@ -1,8 +1,9 @@
 import {
+  forwardRef,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
-  useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
   type Ref
@@ -11,13 +12,16 @@ import type { ChatSessionRow, ChatSessionSummary } from '../../../shared/dbTypes
 import { formatRelativeTime } from './marksTabUtils'
 import ChatTerminal, { type ChatTerminalHandle } from './ChatTerminal'
 
+export interface ChatTabContentHandle {
+  createSession: () => Promise<void>
+}
+
 interface Props {
   projectPath: string | null
   documentId: string | null
   currentPage: number | null
   selectedSessionId: string | null
   onSelectSession: (sessionId: string | null) => void
-  newSessionSignal?: number
   terminalRef?: Ref<ChatTerminalHandle>
 }
 
@@ -38,15 +42,10 @@ const DEFAULT_SESSIONS_HEIGHT = 188
 const MIN_SESSIONS_HEIGHT = 140
 const MAX_SESSIONS_HEIGHT_RATIO = 0.45
 
-export default function ChatTabContent({
-  projectPath,
-  documentId,
-  currentPage,
-  selectedSessionId,
-  onSelectSession,
-  newSessionSignal = 0,
-  terminalRef
-}: Props): React.JSX.Element {
+function ChatTabContentInner(
+  { projectPath, documentId, currentPage, selectedSessionId, onSelectSession, terminalRef }: Props,
+  ref: Ref<ChatTabContentHandle>
+): React.JSX.Element {
   const scopeKey = useMemo(() => {
     if (projectPath) return projectPath
     if (documentId) return `document:${documentId}`
@@ -135,14 +134,16 @@ export default function ChatTabContent({
     }
   }, [createSession])
 
-  const lastSignalRef = useRef(0)
-  useEffect(() => {
-    if (newSessionSignal === 0) return
-    if (newSessionSignal === lastSignalRef.current) return
-    lastSignalRef.current = newSessionSignal
-    if (!hasContext) return
-    void handleCreateSession()
-  }, [handleCreateSession, hasContext, newSessionSignal])
+  useImperativeHandle(
+    ref,
+    () => ({
+      createSession: async () => {
+        if (!hasContext) return
+        await handleCreateSession()
+      }
+    }),
+    [handleCreateSession, hasContext]
+  )
 
   const handleSaveTitle = useCallback(async (): Promise<void> => {
     if (!selectedSession) return
@@ -311,3 +312,5 @@ export default function ChatTabContent({
     </div>
   )
 }
+
+export default forwardRef<ChatTabContentHandle, Props>(ChatTabContentInner)

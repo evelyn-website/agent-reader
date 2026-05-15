@@ -5,7 +5,7 @@ import Toolbar from './components/Toolbar'
 import SidePanel, { type SidePanelTab } from './components/SidePanel'
 import OutlineTabContent from './components/OutlineTabContent'
 import FilesTabContent from './components/FilesTabContent'
-import ChatTabContent from './components/ChatTabContent'
+import ChatTabContent, { type ChatTabContentHandle } from './components/ChatTabContent'
 import type { ChatTerminalHandle } from './components/ChatTerminal'
 import MarksTabContent from './components/MarksTabContent'
 import EmptyLauncher from './components/EmptyLauncher'
@@ -32,7 +32,7 @@ export default function App(): React.JSX.Element {
     focusRightTab
   } = useSidePanels()
   const [selectedChatSessionId, setSelectedChatSessionId] = useState<string | null>(null)
-  const [newSessionSignal, setNewSessionSignal] = useState(0)
+  const chatTabRef = useRef<ChatTabContentHandle | null>(null)
   const chatTerminalRef = useRef<ChatTerminalHandle | null>(null)
   const selectedChatSessionIdRef = useRef<string | null>(null)
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function App(): React.JSX.Element {
       if (e.key !== 'n' && e.key !== 'N') return
       e.preventDefault()
       focusRightTab('chat')
-      setNewSessionSignal((n) => n + 1)
+      void chatTabRef.current?.createSession()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -157,12 +157,12 @@ export default function App(): React.JSX.Element {
       label: 'Chat',
       content: (
         <ChatTabContent
+          ref={chatTabRef}
           projectPath={project?.path ?? null}
           documentId={pdf?.documentId ?? null}
           currentPage={pdf ? windowed.currentPage : null}
           selectedSessionId={selectedChatSessionId}
           onSelectSession={setSelectedChatSessionId}
-          newSessionSignal={newSessionSignal}
           terminalRef={chatTerminalRef}
         />
       )

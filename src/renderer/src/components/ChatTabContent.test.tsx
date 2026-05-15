@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState, type Ref } from 'react'
+import { act } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 
@@ -8,7 +9,7 @@ vi.mock('./ChatTerminal', () => ({
   )
 }))
 
-import ChatTabContent from './ChatTabContent'
+import ChatTabContent, { type ChatTabContentHandle } from './ChatTabContent'
 import type { ChatSessionRow, ChatSessionSummary } from '../../../shared/dbTypes'
 
 function makeSession(overrides: Partial<ChatSessionSummary> = {}): ChatSessionSummary {
@@ -49,24 +50,24 @@ interface HarnessProps {
   projectPath: string | null
   documentId: string | null
   currentPage: number | null
-  newSessionSignal?: number
+  tabRef?: Ref<ChatTabContentHandle>
 }
 
 function Harness({
   projectPath,
   documentId,
   currentPage,
-  newSessionSignal
+  tabRef
 }: HarnessProps): React.JSX.Element {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   return (
     <ChatTabContent
+      ref={tabRef}
       projectPath={projectPath}
       documentId={documentId}
       currentPage={currentPage}
       selectedSessionId={selectedSessionId}
       onSelectSession={setSelectedSessionId}
-      newSessionSignal={newSessionSignal}
     />
   )
 }
@@ -109,20 +110,33 @@ describe('ChatTabContent', () => {
     expect(await screen.findByDisplayValue('Reading notes')).toBeInTheDocument()
   })
 
-  it('creates a session when the newSessionSignal increments', async () => {
+  it('creates a session when createSession() is called on the imperative ref', async () => {
     vi.mocked(window.api.chat.sessions.list).mockResolvedValue([])
     vi.mocked(window.api.chat.sessions.create).mockResolvedValue(makeSessionRow())
 
-    const { rerender } = render(
-      <Harness projectPath="/project" documentId="doc-1" currentPage={4} newSessionSignal={0} />
-    )
+    function RefHarness(): React.JSX.Element {
+      const ref = useRef<ChatTabContentHandle>(null)
+      return (
+        <>
+          <button type="button" onClick={() => void ref.current?.createSession()}>
+            external-create
+          </button>
+          <Harness
+            projectPath="/project"
+            documentId="doc-1"
+            currentPage={4}
+            tabRef={ref}
+          />
+        </>
+      )
+    }
+
+    render(<RefHarness />)
 
     await screen.findByText('No sessions yet.')
     expect(window.api.chat.sessions.create).not.toHaveBeenCalled()
 
-    rerender(
-      <Harness projectPath="/project" documentId="doc-1" currentPage={4} newSessionSignal={1} />
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'external-create' }))
 
     await waitFor(() => {
       expect(window.api.chat.sessions.create).toHaveBeenCalledWith({
@@ -131,6 +145,24 @@ describe('ChatTabContent', () => {
         origin_page_number: 4
       })
     })
+  })
+
+  it('ignores createSession() on the imperative ref when no project or document is open', async () => {
+    const ref = { current: null as ChatTabContentHandle | null }
+
+    function CaptureRef(): React.JSX.Element {
+      return <Harness projectPath={null} documentId={null} currentPage={null} tabRef={ref} />
+    }
+
+    render(<CaptureRef />)
+
+    await screen.findByText('Open a document or project to start a session.')
+
+    await act(async () => {
+      await ref.current?.createSession()
+    })
+
+    expect(window.api.chat.sessions.create).not.toHaveBeenCalled()
   })
 
   it('renames and deletes the selected session', async () => {
