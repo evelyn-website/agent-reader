@@ -56,6 +56,13 @@ declare global {
             handler: (event: { sessionId: string; exitCode: number; signal?: number }) => void
           ) => () => void
         }
+        activeLocation: {
+          update: (payload: {
+            documentId: string | null
+            page: number | null
+            docPath: string | null
+          }) => Promise<null>
+        }
       }
       project: {
         open: () => Promise<string | null>
@@ -66,6 +73,9 @@ declare global {
       searchIndex: {
         get: (documentId: string) => Promise<string[] | null>
         put: (documentId: string, pageTexts: string[]) => Promise<null>
+      }
+      db: {
+        getPageText: (documentId: string, page: number) => Promise<string | null>
       }
     }
   }

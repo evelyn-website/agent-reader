@@ -121,12 +121,7 @@ describe('ChatTabContent', () => {
           <button type="button" onClick={() => void ref.current?.createSession()}>
             external-create
           </button>
-          <Harness
-            projectPath="/project"
-            documentId="doc-1"
-            currentPage={4}
-            tabRef={ref}
-          />
+          <Harness projectPath="/project" documentId="doc-1" currentPage={4} tabRef={ref} />
         </>
       )
     }

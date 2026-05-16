@@ -6,3 +6,4 @@ coverage
 .eslintcache
 *.log*
 *.tsbuildinfo
+resources/mcp-server/

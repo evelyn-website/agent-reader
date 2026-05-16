@@ -1,0 +1,466 @@
+// Agent Reader MCP server. Speaks newline-delimited JSON-RPC 2.0 over stdio
+// (the MCP stdio transport). Reads from the same SQLite file the Electron
+// app writes to (better-sqlite3 in WAL mode handles cross-process access)
+// and writes Marks via the `annotations` table.
+//
+// Invoked by claude per-session. The Electron main process passes:
+//   AR_DB_PATH                  absolute path to the SQLite file
+//   AR_ACTIVE_LOCATION_FILE     JSON file the main process keeps current
+//   AR_SESSION_ORIGIN_DOC_ID    document id where the session was created (may be empty)
+//   AR_SESSION_ORIGIN_PAGE      page number where the session was created (may be empty)
+//
+// Bundled via `scripts/build-mcp-server.mjs` to `resources/mcp-server/index.js`
+// and invoked under ELECTRON_RUN_AS_NODE=true so `require('better-sqlite3')`
+// resolves the already-rebuilt Electron-Node binding instead of needing its
+// own ABI.
+
+import { existsSync, readFileSync } from 'fs'
+import { randomUUID } from 'crypto'
+import type Database from 'better-sqlite3'
+
+export const PROTOCOL_VERSION = '2024-11-05'
+
+export interface ActiveLocation {
+  documentId: string | null
+  page: number | null
+  docPath: string | null
+}
+
+export type AnchorInput = 'origin' | 'current' | { document_id: string; page: number }
+
+export interface ToolResult {
+  content: Array<{ type: 'text'; text: string }>
+  isError?: boolean
+}
+
+export interface JsonRpcRequest {
+  jsonrpc: '2.0'
+  id?: number | string
+  method: string
+  params?: unknown
+}
+
+export interface JsonRpcResponse {
+  jsonrpc: '2.0'
+  id: number | string
+  result?: unknown
+  error?: { code: number; message: string }
+}
+
+export interface CreateServerOptions {
+  db: Database.Database
+  activeLocationPath: string | null
+  originDocId: string | null
+  originPage: number | null
+}
+
+export interface Server {
+  handleMessage: (msg: unknown) => JsonRpcResponse | null
+  handleToolCall: (name: string, args: unknown) => ToolResult
+  TOOLS: typeof TOOLS
+  PROTOCOL_VERSION: typeof PROTOCOL_VERSION
+}
+
+export const TOOLS = [
+  {
+    name: 'get_page',
+    description:
+      'Return the extracted text of a single page from the active PDF. If document_id is omitted, the page is read from the currently-focused document. Page numbers are 1-based.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        page: { type: 'integer', description: '1-based page number' },
+        document_id: {
+          type: 'string',
+          description: 'Optional document id; defaults to the currently-focused document.'
+        }
+      },
+      required: ['page']
+    }
+  },
+  {
+    name: 'get_pages',
+    description:
+      'Return the extracted text of several pages. Each entry in the result has { page, text }. Pages with no text-layer index return null.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        pages: { type: 'array', items: { type: 'integer' } },
+        document_id: { type: 'string' }
+      },
+      required: ['pages']
+    }
+  },
+  {
+    name: 'search_text',
+    description:
+      'Case-insensitive substring search across the indexed pages of a document. Returns up to 50 matches with page numbers and short surrounding text snippets.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        document_id: { type: 'string' }
+      },
+      required: ['query']
+    }
+  },
+  {
+    name: 'save_note',
+    description:
+      'Save a free-text note as a Mark on the underlying PDF. The note appears in the user\'s Marks panel. The anchor decides which page it lands on: "origin" pins it to the page the chat session began on, "current" pins it to whatever page the user is on right now, or pass an explicit { document_id, page }.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string' },
+        anchor: {
+          oneOf: [
+            { type: 'string', enum: ['origin', 'current'] },
+            {
+              type: 'object',
+              properties: {
+                document_id: { type: 'string' },
+                page: { type: 'integer' }
+              },
+              required: ['document_id', 'page']
+            }
+          ]
+        }
+      },
+      required: ['content', 'anchor']
+    }
+  },
+  {
+    name: 'save_highlight',
+    description:
+      'Save a highlight as a Mark on the underlying PDF. Provide the highlighted text and choose an anchor ("origin", "current", or an explicit { document_id, page }). Optional color and note are stored on the highlight.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string' },
+        anchor: {
+          oneOf: [
+            { type: 'string', enum: ['origin', 'current'] },
+            {
+              type: 'object',
+              properties: {
+                document_id: { type: 'string' },
+                page: { type: 'integer' }
+              },
+              required: ['document_id', 'page']
+            }
+          ]
+        },
+        color: { type: 'string' },
+        note: { type: 'string' }
+      },
+      required: ['text', 'anchor']
+    }
+  }
+] as const
+
+interface ResolvedAnchor {
+  documentId: string
+  page: number
+}
+
+interface InsertAnnotationInput {
+  documentId: string
+  page: number
+  kind: 'note' | 'highlight'
+  color?: string | null
+  text_excerpt?: string | null
+  comment?: string | null
+}
+
+interface SearchIndexRow {
+  pages_json: string
+}
+
+interface AnnotationRow {
+  id: string
+}
+
+export function createServer(opts: CreateServerOptions): Server {
+  const { db, activeLocationPath, originDocId, originPage } = opts
+
+  function readActiveLocation(): ActiveLocation | null {
+    if (!activeLocationPath || !existsSync(activeLocationPath)) return null
+    try {
+      const raw = readFileSync(activeLocationPath, 'utf8')
+      const parsed = JSON.parse(raw) as Partial<ActiveLocation>
+      return {
+        documentId: typeof parsed.documentId === 'string' ? parsed.documentId : null,
+        page: typeof parsed.page === 'number' ? parsed.page : null,
+        docPath: typeof parsed.docPath === 'string' ? parsed.docPath : null
+      }
+    } catch {
+      return null
+    }
+  }
+
+  function resolveAnchor(anchor: unknown): ResolvedAnchor {
+    if (anchor === 'origin') {
+      if (!originDocId || !originPage) {
+        throw new Error('No origin document/page is associated with this session.')
+      }
+      return { documentId: originDocId, page: originPage }
+    }
+    if (anchor === 'current') {
+      const loc = readActiveLocation()
+      if (!loc || !loc.documentId || !loc.page) {
+        throw new Error('No document is currently open. Use "origin" or an explicit anchor.')
+      }
+      return { documentId: loc.documentId, page: loc.page }
+    }
+    if (anchor && typeof anchor === 'object') {
+      const a = anchor as { document_id?: unknown; page?: unknown }
+      if (typeof a.document_id !== 'string' || typeof a.page !== 'number') {
+        throw new Error('Explicit anchor requires { document_id: string, page: integer }.')
+      }
+      return { documentId: a.document_id, page: a.page }
+    }
+    throw new Error('anchor must be "origin", "current", or { document_id, page }.')
+  }
+
+  function resolveDocumentId(explicit: unknown): string {
+    if (typeof explicit === 'string' && explicit) return explicit
+    const loc = readActiveLocation()
+    if (loc && loc.documentId) return loc.documentId
+    throw new Error('No document_id provided and no document is currently open.')
+  }
+
+  function getSearchIndex(documentId: string): string[] | null {
+    const row = db
+      .prepare<
+        [string],
+        SearchIndexRow
+      >('SELECT pages_json FROM search_indexes WHERE document_id = ?')
+      .get(documentId)
+    if (!row) return null
+    try {
+      const parsed = JSON.parse(row.pages_json) as unknown
+      return Array.isArray(parsed) ? (parsed as string[]) : null
+    } catch {
+      return null
+    }
+  }
+
+  function insertAnnotation(input: InsertAnnotationInput): AnnotationRow {
+    const id = randomUUID()
+    const now = Date.now()
+    db.prepare(
+      `INSERT INTO annotations
+         (id, document_id, page_number, kind, color, rects_json,
+          anchor_x, anchor_y, text_excerpt, comment, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)`
+    ).run(
+      id,
+      input.documentId,
+      input.page,
+      input.kind,
+      input.color ?? null,
+      input.text_excerpt ?? null,
+      input.comment ?? null,
+      now,
+      now
+    )
+    return { id }
+  }
+
+  function textResult(text: string): ToolResult {
+    return { content: [{ type: 'text', text }] }
+  }
+
+  function runTool(name: string, args: Record<string, unknown>): ToolResult {
+    switch (name) {
+      case 'get_page': {
+        const docId = resolveDocumentId(args.document_id)
+        const pages = getSearchIndex(docId)
+        if (!pages) return textResult(`No text index available for document ${docId}.`)
+        const page = Number(args.page)
+        const idx = page - 1
+        if (idx < 0 || idx >= pages.length) {
+          return textResult(`Page ${page} is out of range (document has ${pages.length} pages).`)
+        }
+        return textResult(pages[idx] || '')
+      }
+      case 'get_pages': {
+        const docId = resolveDocumentId(args.document_id)
+        const pages = getSearchIndex(docId)
+        if (!pages) return textResult(`No text index available for document ${docId}.`)
+        const requested = Array.isArray(args.pages) ? args.pages : []
+        const out = requested.map((p) => {
+          const n = Number(p)
+          const idx = n - 1
+          if (idx < 0 || idx >= pages.length) return { page: n, text: null }
+          return { page: n, text: pages[idx] || '' }
+        })
+        return textResult(JSON.stringify(out))
+      }
+      case 'search_text': {
+        const docId = resolveDocumentId(args.document_id)
+        const pages = getSearchIndex(docId)
+        if (!pages) return textResult(`No text index available for document ${docId}.`)
+        const q = String(args.query || '').toLowerCase()
+        if (!q) return textResult('[]')
+        const matches: Array<{ page: number; snippet: string }> = []
+        for (let i = 0; i < pages.length && matches.length < 50; i++) {
+          const page = pages[i] || ''
+          const lower = page.toLowerCase()
+          let pos = lower.indexOf(q)
+          while (pos !== -1 && matches.length < 50) {
+            const start = Math.max(0, pos - 40)
+            const end = Math.min(page.length, pos + q.length + 40)
+            matches.push({ page: i + 1, snippet: page.slice(start, end) })
+            pos = lower.indexOf(q, pos + q.length)
+          }
+        }
+        return textResult(JSON.stringify(matches))
+      }
+      case 'save_note': {
+        const { documentId, page } = resolveAnchor(args.anchor)
+        const row = insertAnnotation({
+          documentId,
+          page,
+          kind: 'note',
+          comment: String(args.content || '')
+        })
+        return textResult(`Saved note on page ${page} (id ${row.id}).`)
+      }
+      case 'save_highlight': {
+        const { documentId, page } = resolveAnchor(args.anchor)
+        const row = insertAnnotation({
+          documentId,
+          page,
+          kind: 'highlight',
+          color: typeof args.color === 'string' ? args.color : null,
+          text_excerpt: String(args.text || ''),
+          comment: typeof args.note === 'string' ? args.note : null
+        })
+        return textResult(`Saved highlight on page ${page} (id ${row.id}).`)
+      }
+      default:
+        throw new Error(`Unknown tool: ${name}`)
+    }
+  }
+
+  function handleToolCall(name: string, args: unknown): ToolResult {
+    try {
+      return runTool(name, (args as Record<string, unknown>) ?? {})
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return {
+        content: [{ type: 'text', text: 'Error: ' + message }],
+        isError: true
+      }
+    }
+  }
+
+  function handleMessage(msg: unknown): JsonRpcResponse | null {
+    if (!msg || typeof msg !== 'object') return null
+    const m = msg as JsonRpcRequest
+    if (m.jsonrpc !== '2.0') return null
+    // Notifications have no id; we never respond.
+    if (m.id === undefined) return null
+    const id = m.id
+    try {
+      switch (m.method) {
+        case 'initialize':
+          return {
+            jsonrpc: '2.0',
+            id,
+            result: {
+              protocolVersion: PROTOCOL_VERSION,
+              capabilities: { tools: {} },
+              serverInfo: { name: 'agent-reader', version: '1.0.0' }
+            }
+          }
+        case 'tools/list':
+          return { jsonrpc: '2.0', id, result: { tools: TOOLS } }
+        case 'tools/call': {
+          const params = (m.params as { name?: string; arguments?: unknown }) ?? {}
+          return {
+            jsonrpc: '2.0',
+            id,
+            result: handleToolCall(params.name ?? '', params.arguments)
+          }
+        }
+        case 'ping':
+          return { jsonrpc: '2.0', id, result: {} }
+        default:
+          return {
+            jsonrpc: '2.0',
+            id,
+            error: { code: -32601, message: 'Method not found: ' + m.method }
+          }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return {
+        jsonrpc: '2.0',
+        id,
+        error: { code: -32603, message: 'Internal error: ' + message }
+      }
+    }
+  }
+
+  return { handleMessage, handleToolCall, TOOLS, PROTOCOL_VERSION }
+}
+
+// ---------- stdio entrypoint ----------
+// When bundled by esbuild (CJS) and invoked directly, `require.main === module`.
+// When imported as a library (e.g. from tests), the entrypoint block is skipped.
+
+declare const require: NodeRequire
+declare const module: NodeModule
+
+if (require.main === module) {
+  if (!process.env.AR_DB_PATH) {
+    process.stderr.write('[agent-reader-mcp] AR_DB_PATH not set\n')
+    process.exit(1)
+  }
+  let BetterSqlite3Ctor: typeof import('better-sqlite3')
+  try {
+    BetterSqlite3Ctor = require('better-sqlite3')
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    process.stderr.write('[agent-reader-mcp] failed to load better-sqlite3: ' + message + '\n')
+    process.exit(1)
+  }
+  const db = new BetterSqlite3Ctor(process.env.AR_DB_PATH, { readonly: false })
+  db.pragma('journal_mode = WAL')
+  db.pragma('foreign_keys = ON')
+
+  const originPageRaw = process.env.AR_SESSION_ORIGIN_PAGE || ''
+  const server = createServer({
+    db,
+    activeLocationPath: process.env.AR_ACTIVE_LOCATION_FILE || null,
+    originDocId: process.env.AR_SESSION_ORIGIN_DOC_ID || null,
+    originPage: originPageRaw ? Number(originPageRaw) : null
+  })
+
+  function send(msg: JsonRpcResponse): void {
+    process.stdout.write(JSON.stringify(msg) + '\n')
+  }
+
+  let buf = ''
+  process.stdin.setEncoding('utf8')
+  process.stdin.on('data', (chunk: string) => {
+    buf += chunk
+    let nl: number
+    while ((nl = buf.indexOf('\n')) !== -1) {
+      const line = buf.slice(0, nl).trim()
+      buf = buf.slice(nl + 1)
+      if (!line) continue
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(line)
+      } catch {
+        continue
+      }
+      const response = server.handleMessage(parsed)
+      if (response) send(response)
+    }
+  })
+  process.stdin.on('end', () => process.exit(0))
+}

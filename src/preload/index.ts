@@ -23,6 +23,11 @@ export type PtyAttachResult =
 export type PtyDataEvent = { sessionId: string; data: string }
 export type PtyExitEvent = { sessionId: string; exitCode: number; signal?: number }
 export type SessionsChangedEvent = { sessionId: string; scopeKey: string }
+export type ActiveLocationPayload = {
+  documentId: string | null
+  page: number | null
+  docPath: string | null
+}
 
 const api = {
   openPdf: (): Promise<string | null> => ipcRenderer.invoke('pdf:open'),
@@ -79,6 +84,10 @@ const api = {
         ipcRenderer.on('chat:pty:exit', listener)
         return () => ipcRenderer.removeListener('chat:pty:exit', listener)
       }
+    },
+    activeLocation: {
+      update: (payload: ActiveLocationPayload): Promise<null> =>
+        ipcRenderer.invoke('chat:activeLocation:update', payload)
     }
   },
   project: {
@@ -93,6 +102,10 @@ const api = {
       ipcRenderer.invoke('searchIndex:get', documentId),
     put: (documentId: string, pageTexts: string[]): Promise<null> =>
       ipcRenderer.invoke('searchIndex:put', documentId, pageTexts)
+  },
+  db: {
+    getPageText: (documentId: string, page: number): Promise<string | null> =>
+      ipcRenderer.invoke('db:getPageText', documentId, page)
   }
 }
 

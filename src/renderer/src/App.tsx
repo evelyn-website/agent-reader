@@ -127,6 +127,54 @@ export default function App(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [focusRightTab])
 
+  useEffect(() => {
+    void window.api.chat.activeLocation.update({
+      documentId: pdf?.documentId ?? null,
+      page: pdf ? windowed.currentPage : null,
+      docPath: pdf?.path ?? null
+    })
+  }, [pdf?.documentId, pdf?.path, windowed.currentPage, pdf])
+
+  const documentIdRef = useRef<string | null>(null)
+  const currentPageRef = useRef<number | null>(null)
+  useEffect(() => {
+    documentIdRef.current = pdf?.documentId ?? null
+    currentPageRef.current = pdf ? windowed.currentPage : null
+  }, [pdf, windowed.currentPage])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!e.metaKey || e.altKey || e.ctrlKey || !e.shiftKey) return
+      if (e.key !== 'a' && e.key !== 'A') return
+      const sessionId = selectedChatSessionIdRef.current
+      if (!sessionId) return
+      e.preventDefault()
+
+      const sel = window.getSelection()
+      const selectedText = sel && !sel.isCollapsed ? sel.toString().trim() : ''
+
+      void (async (): Promise<void> => {
+        let body = selectedText
+        let label = 'Selection'
+        if (!body) {
+          const docId = documentIdRef.current
+          const page = currentPageRef.current
+          if (!docId || !page) return
+          const pageText = await window.api.db.getPageText(docId, page)
+          if (!pageText) return
+          body = pageText
+          label = `Page ${page}`
+        }
+        focusRightTab('chat')
+        chatTerminalRef.current?.focus()
+        const prompt = `[${label}]\n${body}\n\n`
+        await window.api.chat.pty.write(sessionId, `\x1b[200~${prompt}\x1b[201~`)
+      })()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [focusRightTab])
+
   const leftTabs: SidePanelTab[] = [
     {
       id: 'files',

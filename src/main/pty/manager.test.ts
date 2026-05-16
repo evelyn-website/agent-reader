@@ -4,7 +4,8 @@ import { EventEmitter } from 'events'
 vi.mock('../db', () => ({
   getChatSession: vi.fn(),
   getDocument: vi.fn(),
-  setChatSessionClaudeId: vi.fn(() => null)
+  setChatSessionClaudeId: vi.fn(() => null),
+  getDbPath: vi.fn(() => '/tmp/agent-reader-test.db')
 }))
 
 vi.mock('../chat/cwd', () => ({
@@ -32,6 +33,16 @@ vi.mock('../chat/broadcast', () => ({
 vi.mock('../chat/hookScript', () => ({
   getHookNodePath: vi.fn(() => 'node'),
   getHookScriptPath: vi.fn(() => '/tmp/hook.js')
+}))
+
+vi.mock('../mcp/serverScript', () => ({
+  getMcpServerScriptPath: vi.fn(() => '/tmp/mcp-server.js')
+}))
+
+vi.mock('../mcp/activeLocation', () => ({
+  getActiveLocationFilePath: vi.fn(() => '/tmp/active-location.json'),
+  writeActiveLocation: vi.fn(),
+  readActiveLocation: vi.fn()
 }))
 
 import { ChatPtyManager } from './manager'
@@ -253,6 +264,22 @@ describe('ChatPtyManager', () => {
     expect(call.opts.env?.AGENT_READER_SESSION_ID_FILE).toMatch(/agent-reader-test-s1\.id$/)
     // No --resume on a fresh session.
     expect(call.args).not.toContain('--resume')
+  })
+
+  it('passes --mcp-config with the agent-reader stdio server when db path is known', () => {
+    const wc = makeWebContents()
+    const result = manager.attach('s1', wc as never, 80, 24)
+    expect(result.ok).toBe(true)
+
+    const args = spawnHarness.calls[0].args
+    const idx = args.indexOf('--mcp-config')
+    expect(idx).toBeGreaterThanOrEqual(0)
+    const config = JSON.parse(args[idx + 1])
+    expect(config.mcpServers['agent-reader'].type).toBe('stdio')
+    expect(config.mcpServers['agent-reader'].env.ELECTRON_RUN_AS_NODE).toBe('1')
+    expect(config.mcpServers['agent-reader'].env.AR_DB_PATH).toBe('/tmp/agent-reader-test.db')
+    // --strict-mcp-config intentionally omitted so the user's global MCPs still work.
+    expect(args).not.toContain('--strict-mcp-config')
   })
 
   it('adds --resume <claudeId> when the session row already has a claude_session_id', () => {

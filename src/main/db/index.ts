@@ -47,6 +47,11 @@ export type {
 export const DEFAULT_CHAT_SESSION_TITLE = 'New session'
 
 let db: Database.Database | null = null
+let dbPathInUse: string | null = null
+
+export function getDbPath(): string | null {
+  return dbPathInUse
+}
 
 export function createDb(dbPath: string): Database.Database {
   const instance = new Database(dbPath)
@@ -62,6 +67,7 @@ export function initDb(dbPath?: string): void {
     path = join(app.getPath('userData'), 'agent-reader.db')
   }
   db = createDb(path)
+  dbPathInUse = path
 }
 
 export function setDbForTesting(instance: Database.Database | null): void {
@@ -516,6 +522,14 @@ export function getSearchIndex(documentId: string): string[] | null {
     )
     .get(documentId, SEARCH_INDEX_SCHEMA_V)
   return row ? (JSON.parse(row.pages_json) as string[]) : null
+}
+
+export function getPageText(documentId: string, page: number): string | null {
+  const pages = getSearchIndex(documentId)
+  if (!pages) return null
+  const idx = page - 1
+  if (idx < 0 || idx >= pages.length) return null
+  return pages[idx]
 }
 
 export function putSearchIndex(documentId: string, pageTexts: string[]): void {

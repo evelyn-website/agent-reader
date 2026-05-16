@@ -37,7 +37,13 @@ beforeEach(() => {
         interrupt: vi.fn().mockResolvedValue(null),
         onData: vi.fn(() => () => {}),
         onExit: vi.fn(() => () => {})
+      },
+      activeLocation: {
+        update: vi.fn().mockResolvedValue(null)
       }
+    },
+    db: {
+      getPageText: vi.fn().mockResolvedValue(null)
     },
     project: {
       open: vi.fn(),

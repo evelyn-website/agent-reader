@@ -23,6 +23,7 @@ import {
   getProjectDashboard,
   getSearchIndex,
   putSearchIndex,
+  getPageText,
   type CreateChatSessionInput,
   type CreateAnnotationInput,
   type ProjectDashboard,
@@ -30,6 +31,7 @@ import {
   type UpdateAnnotationInput
 } from './db'
 import { scanProjectPdfs, folderExists, flattenProjectFiles, type ProjectScan } from './project'
+import { writeActiveLocation, type ActiveLocation } from './mcp/activeLocation'
 
 export function registerIpcHandlers(): void {
   ipcMain.on('ping', () => console.log('pong'))
@@ -119,6 +121,11 @@ export function registerIpcHandlers(): void {
     return null
   })
 
+  ipcMain.handle('chat:activeLocation:update', (_event, loc: ActiveLocation) => {
+    writeActiveLocation(loc)
+    return null
+  })
+
   ipcMain.handle('project:open', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
       properties: ['openDirectory']
@@ -143,6 +150,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('searchIndex:put', (_event, documentId: string, pageTexts: string[]) => {
     putSearchIndex(documentId, pageTexts)
     return null
+  })
+
+  ipcMain.handle('db:getPageText', (_event, documentId: string, page: number) => {
+    return getPageText(documentId, page)
   })
 
   ipcMain.handle('project:listRecent', (): ProjectRow[] => {

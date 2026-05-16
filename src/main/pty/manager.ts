@@ -8,6 +8,8 @@ import { reserveSessionId, type SessionIdReservation } from '../chat/sessionIdCh
 import { adoptClaudeSessionId, startJsonlHydrator, stopJsonlHydrator } from '../chat/jsonlHydrator'
 import { broadcastSessionsChanged } from '../chat/broadcast'
 import { getHookNodePath, getHookScriptPath } from '../chat/hookScript'
+import { buildMcpConfig } from '../mcp/config'
+import { getDbPath } from '../db'
 
 const DEBUG = process.env.DEBUG_CHAT_PTY === '1'
 const debug = (...args: unknown[]): void => {
@@ -89,6 +91,17 @@ class ChatPtyManager {
 
       const settingsJson = buildSettingsJson()
       const args: string[] = ['--settings', settingsJson]
+      const dbPath = getDbPath()
+      if (dbPath) {
+        const mcpConfig = buildMcpConfig({
+          session,
+          dbPath,
+          electronExecPath: process.execPath
+        })
+        args.push('--mcp-config', mcpConfig)
+      } else {
+        debug('skipping --mcp-config: db path unknown (likely test harness)')
+      }
       if (session.claude_session_id) {
         args.unshift('--resume', session.claude_session_id)
         resumed = true
