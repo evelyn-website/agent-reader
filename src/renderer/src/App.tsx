@@ -71,7 +71,8 @@ export default function App(): React.JSX.Element {
     openProjectByPath,
     openProjectDocument,
     openProjectMark,
-    dismissProjectDocument
+    dismissProjectDocument,
+    closeProject
   } = useProjectSession({
     pdf,
     numPages,
@@ -285,6 +286,7 @@ export default function App(): React.JSX.Element {
         noteMode={noteMode}
         onToggleNoteMode={() => setNoteMode((v) => !v)}
         onDismissDocument={project && pdf ? dismissProjectDocument : undefined}
+        onCloseProject={project && !pdf ? closeProject : undefined}
         projectName={project?.name ?? null}
       />
       <div className="main-area">

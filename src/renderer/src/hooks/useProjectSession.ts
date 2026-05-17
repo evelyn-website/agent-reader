@@ -37,6 +37,7 @@ export function useProjectSession({
   openProjectDocument: (path: string) => Promise<void>
   openProjectMark: (mark: ProjectMarkSummary) => Promise<void>
   dismissProjectDocument: () => void
+  closeProject: () => void
 } {
   const [project, setProject] = useState<ProjectScan | null>(null)
   const [projectDashboard, setProjectDashboard] = useState<ProjectDashboardData | null>(null)
@@ -137,6 +138,15 @@ export function useProjectSession({
     clearDocument()
   }, [clearDocument])
 
+  const closeProject = useCallback((): void => {
+    pendingProjectJumpRef.current = null
+    projectPageCacheRef.current.clear()
+    clearDocument()
+    setProject(null)
+    setProjectDashboard(null)
+    setProjectDashboardLoading(false)
+  }, [clearDocument])
+
   return {
     project,
     projectDashboard,
@@ -146,6 +156,7 @@ export function useProjectSession({
     openProjectByPath,
     openProjectDocument,
     openProjectMark,
-    dismissProjectDocument
+    dismissProjectDocument,
+    closeProject
   }
 }

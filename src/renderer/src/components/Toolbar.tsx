@@ -23,6 +23,7 @@ interface ToolbarProps {
   noteMode: boolean
   onToggleNoteMode: () => void
   onDismissDocument?: () => void
+  onCloseProject?: () => void
   projectName?: string | null
 }
 
@@ -47,6 +48,7 @@ export default function Toolbar({
   noteMode,
   onToggleNoteMode,
   onDismissDocument,
+  onCloseProject,
   projectName
 }: ToolbarProps): React.JSX.Element {
   const [pageInputDraft, setPageInputDraft] = useState<string | null>(null)
@@ -122,6 +124,20 @@ export default function Toolbar({
             </button>
           )}
           <span className="pdf-filename__text">{filename}</span>
+        </span>
+      )}
+      {!filename && onCloseProject && (
+        <span className="pdf-filename">
+          <button
+            type="button"
+            className="pdf-filename__back"
+            onClick={onCloseProject}
+            title="Back to launcher"
+            aria-label="Back to launcher"
+          >
+            <HomeIcon size={15} />
+          </button>
+          {projectName && <span className="pdf-filename__text">{projectName}</span>}
         </span>
       )}
       {showAnnotationControls && (
