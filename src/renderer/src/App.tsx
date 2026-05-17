@@ -175,6 +175,38 @@ export default function App(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [focusRightTab])
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!e.metaKey || e.altKey || e.ctrlKey || !e.shiftKey) return
+      if (e.key !== 's' && e.key !== 'S') return
+      const sessionId = selectedChatSessionIdRef.current
+      if (!sessionId) return
+      e.preventDefault()
+
+      void (async (): Promise<void> => {
+        const selectedText = chatTerminalRef.current?.getSelection().trim() ?? ''
+        let content = selectedText
+        if (!content) {
+          const msg = await window.api.chat.messages.lastAssistant(sessionId)
+          if (!msg) return
+          content = msg.content
+        }
+        const session = await window.api.chat.sessions.get(sessionId)
+        if (!session?.origin_document_id || !session.origin_page_number) return
+        await window.api.annotations.create({
+          document_id: session.origin_document_id,
+          page_number: session.origin_page_number,
+          kind: 'note',
+          anchor_x: 20,
+          anchor_y: 20,
+          comment: content
+        })
+      })()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const leftTabs: SidePanelTab[] = [
     {
       id: 'files',

@@ -22,9 +22,11 @@ vi.mock('./db', () => ({
   deleteAnnotation: vi.fn(),
   listChatSessions: vi.fn(),
   createChatSession: vi.fn(),
+  getChatSession: vi.fn(),
   updateChatSessionTitle: vi.fn(),
   deleteChatSession: vi.fn(),
   listChatMessages: vi.fn(),
+  getLastAssistantMessage: vi.fn(),
   recordProjectOpen: vi.fn(),
   listRecentProjects: vi.fn(),
   deleteProject: vi.fn(),
@@ -51,10 +53,15 @@ vi.mock('./pty/manager', () => ({
   }
 }))
 
+vi.mock('./chat/broadcast', () => ({
+  broadcastAnnotationsChanged: vi.fn()
+}))
+
 import { ipcMain, dialog } from 'electron'
 import { readFileSync } from 'fs'
 import * as db from './db'
 import * as project from './project'
+import * as broadcast from './chat/broadcast'
 import { registerIpcHandlers } from './ipc'
 
 type HandlerFn = (_event: unknown, ...args: unknown[]) => unknown
@@ -80,10 +87,12 @@ describe('registerIpcHandlers', () => {
     expect(channels).toContain('annotations:update')
     expect(channels).toContain('annotations:delete')
     expect(channels).toContain('chat:sessions:list')
+    expect(channels).toContain('chat:sessions:get')
     expect(channels).toContain('chat:sessions:create')
     expect(channels).toContain('chat:sessions:updateTitle')
     expect(channels).toContain('chat:sessions:delete')
     expect(channels).toContain('chat:messages:list')
+    expect(channels).toContain('chat:messages:lastAssistant')
     expect(channels).toContain('chat:pty:attach')
     expect(channels).toContain('chat:pty:detach')
     expect(channels).toContain('chat:pty:write')
@@ -145,7 +154,7 @@ describe('registerIpcHandlers', () => {
   })
 
   describe('annotations:create', () => {
-    it('delegates to createAnnotation', () => {
+    it('delegates to createAnnotation and broadcasts changed event', () => {
       const input = { document_id: 'doc-1', page_number: 1, kind: 'highlight' as const }
       const fakeRow = { id: 'ann-1' }
       vi.mocked(db.createAnnotation).mockReturnValue(
@@ -153,6 +162,7 @@ describe('registerIpcHandlers', () => {
       )
       const result = getHandler('annotations:create')({}, input)
       expect(db.createAnnotation).toHaveBeenCalledWith(input)
+      expect(broadcast.broadcastAnnotationsChanged).toHaveBeenCalledWith({ documentId: 'doc-1' })
       expect(result).toBe(fakeRow)
     })
   })
@@ -227,6 +237,28 @@ describe('registerIpcHandlers', () => {
       const result = getHandler('chat:messages:list')({}, 'session-1')
       expect(db.listChatMessages).toHaveBeenCalledWith('session-1')
       expect(result).toBe(rows)
+    })
+  })
+
+  describe('chat:sessions:get', () => {
+    it('delegates to getChatSession', () => {
+      const row = { id: 'session-1' }
+      vi.mocked(db.getChatSession).mockReturnValue(row as ReturnType<typeof db.getChatSession>)
+      const result = getHandler('chat:sessions:get')({}, 'session-1')
+      expect(db.getChatSession).toHaveBeenCalledWith('session-1')
+      expect(result).toBe(row)
+    })
+  })
+
+  describe('chat:messages:lastAssistant', () => {
+    it('delegates to getLastAssistantMessage', () => {
+      const row = { id: 'message-1', role: 'assistant' as const }
+      vi.mocked(db.getLastAssistantMessage).mockReturnValue(
+        row as ReturnType<typeof db.getLastAssistantMessage>
+      )
+      const result = getHandler('chat:messages:lastAssistant')({}, 'session-1')
+      expect(db.getLastAssistantMessage).toHaveBeenCalledWith('session-1')
+      expect(result).toBe(row)
     })
   })
 

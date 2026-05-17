@@ -15,9 +15,11 @@ import {
   drainMarkEventQueue,
   listChatSessions,
   createChatSession,
+  getChatSession,
   updateChatSessionTitle,
   deleteChatSession,
   listChatMessages,
+  getLastAssistantMessage,
   recordProjectOpen,
   listRecentProjects,
   deleteProject,
@@ -97,7 +99,9 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('annotations:create', (_event, input: CreateAnnotationInput) => {
-    return createAnnotation(input)
+    const row = createAnnotation(input)
+    broadcastAnnotationsChanged({ documentId: input.document_id })
+    return row
   })
 
   ipcMain.handle('annotations:update', (_event, id: string, patch: UpdateAnnotationInput) => {
@@ -129,6 +133,14 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('chat:messages:list', (_event, sessionId: string) => {
     return listChatMessages(sessionId)
+  })
+
+  ipcMain.handle('chat:sessions:get', (_event, id: string) => {
+    return getChatSession(id)
+  })
+
+  ipcMain.handle('chat:messages:lastAssistant', (_event, sessionId: string) => {
+    return getLastAssistantMessage(sessionId)
   })
 
   ipcMain.handle('chat:pty:attach', (event, sessionId: string, cols: number, rows: number) => {

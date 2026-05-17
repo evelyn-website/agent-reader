@@ -29,6 +29,7 @@ declare global {
       chat: {
         sessions: {
           list: (scopeKey: string) => Promise<ChatSessionSummary[]>
+          get: (id: string) => Promise<ChatSessionRow | null>
           create: (input: CreateChatSessionInput) => Promise<ChatSessionRow>
           updateTitle: (id: string, title: string) => Promise<ChatSessionRow | null>
           delete: (id: string) => Promise<null>
@@ -38,6 +39,7 @@ declare global {
         }
         messages: {
           list: (sessionId: string) => Promise<ChatMessageRow[]>
+          lastAssistant: (sessionId: string) => Promise<ChatMessageRow | null>
         }
         pty: {
           attach: (

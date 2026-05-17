@@ -52,6 +52,8 @@ const api = {
     sessions: {
       list: (scopeKey: string): Promise<ChatSessionSummary[]> =>
         ipcRenderer.invoke('chat:sessions:list', scopeKey),
+      get: (id: string): Promise<ChatSessionRow | null> =>
+        ipcRenderer.invoke('chat:sessions:get', id),
       create: (input: CreateChatSessionInput): Promise<ChatSessionRow> =>
         ipcRenderer.invoke('chat:sessions:create', input),
       updateTitle: (id: string, title: string): Promise<ChatSessionRow | null> =>
@@ -66,7 +68,9 @@ const api = {
     },
     messages: {
       list: (sessionId: string): Promise<ChatMessageRow[]> =>
-        ipcRenderer.invoke('chat:messages:list', sessionId)
+        ipcRenderer.invoke('chat:messages:list', sessionId),
+      lastAssistant: (sessionId: string): Promise<ChatMessageRow | null> =>
+        ipcRenderer.invoke('chat:messages:lastAssistant', sessionId)
     },
     pty: {
       attach: (sessionId: string, cols: number, rows: number): Promise<PtyAttachResult> =>

@@ -12,6 +12,7 @@ import {
   updateChatSessionTitleIfDefault,
   deleteChatSession,
   listChatMessages,
+  getLastAssistantMessage,
   createChatMessage,
   setChatSessionClaudeId,
   upsertChatMessageFromJsonl,
@@ -504,6 +505,90 @@ describe('project dashboard', () => {
       path: '/project/a.pdf',
       document_name: 'a.pdf',
       page_number: 2
+    })
+  })
+})
+
+describe('getLastAssistantMessage', () => {
+  let db: Database.Database
+
+  beforeEach(() => {
+    db = createDb(':memory:')
+    setDbForTesting(db)
+  })
+
+  afterEach(() => {
+    setDbForTesting(null)
+    db.close()
+  })
+
+  it('returns null for a session with no messages', () => {
+    const session = createChatSession({
+      scope_key: 'test'
+    })
+    const msg = getLastAssistantMessage(session.id)
+    expect(msg).toBeNull()
+  })
+
+  it('returns null when only user-role messages exist', () => {
+    const session = createChatSession({
+      scope_key: 'test'
+    })
+    createChatMessage({
+      session_id: session.id,
+      role: 'user',
+      content: 'Hello'
+    })
+    const msg = getLastAssistantMessage(session.id)
+    expect(msg).toBeNull()
+  })
+
+  it('returns the single assistant message when only one exists', () => {
+    const session = createChatSession({
+      scope_key: 'test'
+    })
+    const assistant = createChatMessage({
+      session_id: session.id,
+      role: 'assistant',
+      content: 'Assistant response'
+    })
+    const msg = getLastAssistantMessage(session.id)
+    expect(msg).toMatchObject({
+      id: assistant.id,
+      role: 'assistant',
+      content: 'Assistant response'
+    })
+  })
+
+  it('returns the most recent assistant message when multiple exist', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
+    const session = createChatSession({
+      scope_key: 'test'
+    })
+    createChatMessage({
+      session_id: session.id,
+      role: 'assistant',
+      content: 'Old response'
+    })
+    vi.setSystemTime(2000)
+    createChatMessage({
+      session_id: session.id,
+      role: 'user',
+      content: 'Follow-up'
+    })
+    vi.setSystemTime(3000)
+    const latest = createChatMessage({
+      session_id: session.id,
+      role: 'assistant',
+      content: 'Latest response'
+    })
+    vi.useRealTimers()
+    const msg = getLastAssistantMessage(session.id)
+    expect(msg).toMatchObject({
+      id: latest.id,
+      role: 'assistant',
+      content: 'Latest response'
     })
   })
 })

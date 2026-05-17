@@ -17,6 +17,7 @@ const debug = (...args: unknown[]): void => {
 
 export interface ChatTerminalHandle {
   focus: () => void
+  getSelection: () => string
 }
 
 interface Props {
@@ -43,7 +44,8 @@ function ChatTerminalInner(
   const [error, setError] = useState<string | null>(null)
 
   useImperativeHandle(ref, () => ({
-    focus: () => termRef.current?.focus()
+    focus: () => termRef.current?.focus(),
+    getSelection: () => termRef.current?.getSelection() ?? ''
   }))
 
   useEffect(() => {
