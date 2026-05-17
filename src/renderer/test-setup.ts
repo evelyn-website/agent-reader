@@ -10,7 +10,8 @@ beforeEach(() => {
       list: vi.fn().mockResolvedValue([]),
       create: vi.fn(),
       update: vi.fn(),
-      delete: vi.fn()
+      delete: vi.fn(),
+      onChanged: vi.fn(() => () => {})
     },
     chat: {
       sessions: {

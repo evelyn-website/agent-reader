@@ -19,6 +19,7 @@ import {
   listAnnotations,
   updateAnnotation,
   deleteAnnotation,
+  drainMarkEventQueue,
   getProjectDashboard
 } from './index'
 
@@ -380,6 +381,43 @@ describe('annotation CRUD', () => {
       const updated = updateAnnotation(ann.id, { comment: 'changed' })!
       expect(updated.updated_at).toBeGreaterThanOrEqual(ann.updated_at)
     })
+  })
+})
+
+describe('drainMarkEventQueue', () => {
+  let db: Database.Database
+
+  beforeEach(() => {
+    db = createDb(':memory:')
+    setDbForTesting(db)
+  })
+
+  afterEach(() => {
+    setDbForTesting(null)
+    db.close()
+  })
+
+  it('returns empty when no rows are queued', () => {
+    expect(drainMarkEventQueue()).toEqual([])
+  })
+
+  it('returns rows and atomically deletes them in a single transaction', () => {
+    db.prepare(`INSERT INTO mark_event_queue (id, document_id, created_at) VALUES (?, ?, ?)`).run(
+      'ann-1',
+      'doc-A',
+      1
+    )
+    db.prepare(`INSERT INTO mark_event_queue (id, document_id, created_at) VALUES (?, ?, ?)`).run(
+      'ann-2',
+      'doc-B',
+      2
+    )
+    const first = drainMarkEventQueue()
+    expect(first).toEqual([
+      { id: 'ann-1', documentId: 'doc-A' },
+      { id: 'ann-2', documentId: 'doc-B' }
+    ])
+    expect(drainMarkEventQueue()).toEqual([])
   })
 })
 

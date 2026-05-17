@@ -22,7 +22,8 @@ function freshDb(): Database.Database {
   ).run('doc-B', 'b.pdf', '/tmp/b.pdf', 2000, 0, 0, 1)
   db.prepare(
     `INSERT INTO search_indexes (document_id, pages_json, schema_v, built_at) VALUES (?, ?, ?, ?)`
-  ).run('doc-A', JSON.stringify(['Hello world', 'Second page about AGENTS']), 1, 0)
+  // pages_json is 1-indexed in production (buildSearchIndex produces [''] + page texts).
+  ).run('doc-A', JSON.stringify(['', 'Hello world', 'Second page about AGENTS']), 1, 0)
   return db
 }
 
@@ -92,6 +93,19 @@ describe('mcp-server', () => {
       const r = s.handleToolCall('get_page', { page: 1 })
       expect(r.isError).toBe(true)
       expect(r.content[0].text).toMatch(/No document_id/)
+    })
+
+    it('returns current-page text when page is omitted', () => {
+      writeFileSync(locPath, JSON.stringify({ documentId: 'doc-A', page: 2 }), 'utf8')
+      const s = build({ activeLocationPath: locPath })
+      const r = s.handleToolCall('get_page', {})
+      expect(r.content[0].text).toBe('Second page about AGENTS')
+    })
+
+    it('errors when page is omitted and no active location exists', () => {
+      const s = build()
+      const r = s.handleToolCall('get_page', { document_id: 'doc-A' })
+      expect(r.content[0].text).toMatch(/No page specified/)
     })
 
     it('returns an out-of-range message for unknown pages', () => {
@@ -197,6 +211,48 @@ describe('mcp-server', () => {
         text_excerpt: 'Hello world',
         comment: 'greeting'
       })
+    })
+  })
+
+  describe('mark_event_queue', () => {
+    it('save_note enqueues a row with the document id', () => {
+      const s = build({ originDocId: 'doc-A', originPage: 1 })
+      s.handleToolCall('save_note', { content: 'hello', anchor: 'origin' })
+      const rows = db.prepare('SELECT document_id FROM mark_event_queue').all() as {
+        document_id: string
+      }[]
+      expect(rows).toHaveLength(1)
+      expect(rows[0].document_id).toBe('doc-A')
+    })
+
+    it('save_highlight enqueues a row with the document id', () => {
+      const s = build({ originDocId: 'doc-B', originPage: 2 })
+      s.handleToolCall('save_highlight', { text: 'x', anchor: 'origin' })
+      const rows = db.prepare('SELECT document_id FROM mark_event_queue').all() as {
+        document_id: string
+      }[]
+      expect(rows).toHaveLength(1)
+      expect(rows[0].document_id).toBe('doc-B')
+    })
+
+    it('queue row id matches the annotation id', () => {
+      const s = build({ originDocId: 'doc-A', originPage: 1 })
+      s.handleToolCall('save_note', { content: 'hi', anchor: 'origin' })
+      const ann = db.prepare('SELECT id FROM annotations LIMIT 1').get() as { id: string }
+      const q = db.prepare('SELECT id FROM mark_event_queue LIMIT 1').get() as { id: string }
+      expect(q.id).toBe(ann.id)
+    })
+  })
+
+  describe('save_note default position', () => {
+    it('writes a non-null anchor so the note is visible in the renderer', () => {
+      const s = build({ originDocId: 'doc-A', originPage: 1 })
+      s.handleToolCall('save_note', { content: 'hi', anchor: 'origin' })
+      const row = db
+        .prepare('SELECT anchor_x, anchor_y FROM annotations ORDER BY created_at DESC LIMIT 1')
+        .get() as { anchor_x: number | null; anchor_y: number | null }
+      expect(row.anchor_x).not.toBeNull()
+      expect(row.anchor_y).not.toBeNull()
     })
   })
 })

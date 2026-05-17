@@ -65,17 +65,20 @@ export const TOOLS = [
   {
     name: 'get_page',
     description:
-      'Return the extracted text of a single page from the active PDF. If document_id is omitted, the page is read from the currently-focused document. Page numbers are 1-based.',
+      'Return the extracted text of a single page from the active PDF. If page is omitted, returns the page the user is currently viewing. If document_id is omitted, uses the currently-focused document. Page numbers are 1-based.',
     inputSchema: {
       type: 'object',
       properties: {
-        page: { type: 'integer', description: '1-based page number' },
+        page: {
+          type: 'integer',
+          description: '1-based page number; defaults to the page the user is currently viewing.'
+        },
         document_id: {
           type: 'string',
           description: 'Optional document id; defaults to the currently-focused document.'
         }
       },
-      required: ['page']
+      required: []
     }
   },
   {
@@ -170,7 +173,14 @@ interface InsertAnnotationInput {
   color?: string | null
   text_excerpt?: string | null
   comment?: string | null
+  anchor_x?: number | null
+  anchor_y?: number | null
 }
+
+// Default position for MCP-saved notes (PDF-point space, top-left corner area).
+// User-placed notes set their own anchor via click; agent-placed notes get this.
+const DEFAULT_NOTE_ANCHOR_X = 20
+const DEFAULT_NOTE_ANCHOR_Y = 20
 
 interface SearchIndexRow {
   pages_json: string
@@ -248,22 +258,32 @@ export function createServer(opts: CreateServerOptions): Server {
   function insertAnnotation(input: InsertAnnotationInput): AnnotationRow {
     const id = randomUUID()
     const now = Date.now()
-    db.prepare(
+    const insertAnn = db.prepare(
       `INSERT INTO annotations
          (id, document_id, page_number, kind, color, rects_json,
           anchor_x, anchor_y, text_excerpt, comment, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)`
-    ).run(
-      id,
-      input.documentId,
-      input.page,
-      input.kind,
-      input.color ?? null,
-      input.text_excerpt ?? null,
-      input.comment ?? null,
-      now,
-      now
+       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`
     )
+    const enqueue = db.prepare(
+      `INSERT INTO mark_event_queue (id, document_id, created_at) VALUES (?, ?, ?)`
+    )
+    const tx = db.transaction(() => {
+      insertAnn.run(
+        id,
+        input.documentId,
+        input.page,
+        input.kind,
+        input.color ?? null,
+        input.anchor_x ?? null,
+        input.anchor_y ?? null,
+        input.text_excerpt ?? null,
+        input.comment ?? null,
+        now,
+        now
+      )
+      enqueue.run(id, input.documentId, now)
+    })
+    tx()
     return { id }
   }
 
@@ -277,23 +297,33 @@ export function createServer(opts: CreateServerOptions): Server {
         const docId = resolveDocumentId(args.document_id)
         const pages = getSearchIndex(docId)
         if (!pages) return textResult(`No text index available for document ${docId}.`)
-        const page = Number(args.page)
-        const idx = page - 1
-        if (idx < 0 || idx >= pages.length) {
-          return textResult(`Page ${page} is out of range (document has ${pages.length} pages).`)
+        // pages_json is 1-indexed: pages[0] === '', pages[N] === text of PDF page N.
+        const numPages = Math.max(0, pages.length - 1)
+        let page: number
+        if (args.page !== undefined && args.page !== null) {
+          page = Number(args.page)
+        } else {
+          const loc = readActiveLocation()
+          if (!loc?.page) {
+            return textResult('No page specified and no document is currently open.')
+          }
+          page = loc.page
         }
-        return textResult(pages[idx] || '')
+        if (page < 1 || page > numPages) {
+          return textResult(`Page ${page} is out of range (document has ${numPages} pages).`)
+        }
+        return textResult(pages[page] || '')
       }
       case 'get_pages': {
         const docId = resolveDocumentId(args.document_id)
         const pages = getSearchIndex(docId)
         if (!pages) return textResult(`No text index available for document ${docId}.`)
+        const numPages = Math.max(0, pages.length - 1)
         const requested = Array.isArray(args.pages) ? args.pages : []
         const out = requested.map((p) => {
           const n = Number(p)
-          const idx = n - 1
-          if (idx < 0 || idx >= pages.length) return { page: n, text: null }
-          return { page: n, text: pages[idx] || '' }
+          if (n < 1 || n > numPages) return { page: n, text: null }
+          return { page: n, text: pages[n] || '' }
         })
         return textResult(JSON.stringify(out))
       }
@@ -304,14 +334,14 @@ export function createServer(opts: CreateServerOptions): Server {
         const q = String(args.query || '').toLowerCase()
         if (!q) return textResult('[]')
         const matches: Array<{ page: number; snippet: string }> = []
-        for (let i = 0; i < pages.length && matches.length < 50; i++) {
+        for (let i = 1; i < pages.length && matches.length < 50; i++) {
           const page = pages[i] || ''
           const lower = page.toLowerCase()
           let pos = lower.indexOf(q)
           while (pos !== -1 && matches.length < 50) {
             const start = Math.max(0, pos - 40)
             const end = Math.min(page.length, pos + q.length + 40)
-            matches.push({ page: i + 1, snippet: page.slice(start, end) })
+            matches.push({ page: i, snippet: page.slice(start, end) })
             pos = lower.indexOf(q, pos + q.length)
           }
         }
@@ -323,7 +353,9 @@ export function createServer(opts: CreateServerOptions): Server {
           documentId,
           page,
           kind: 'note',
-          comment: String(args.content || '')
+          comment: String(args.content || ''),
+          anchor_x: DEFAULT_NOTE_ANCHOR_X,
+          anchor_y: DEFAULT_NOTE_ANCHOR_Y
         })
         return textResult(`Saved note on page ${page} (id ${row.id}).`)
       }

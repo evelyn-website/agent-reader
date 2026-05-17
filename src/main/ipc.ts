@@ -12,6 +12,7 @@ import {
   createAnnotation,
   updateAnnotation,
   deleteAnnotation,
+  drainMarkEventQueue,
   listChatSessions,
   createChatSession,
   updateChatSessionTitle,
@@ -32,9 +33,42 @@ import {
 } from './db'
 import { scanProjectPdfs, folderExists, flattenProjectFiles, type ProjectScan } from './project'
 import { writeActiveLocation, type ActiveLocation } from './mcp/activeLocation'
+import { broadcastAnnotationsChanged } from './chat/broadcast'
+
+const MARK_EVENT_POLL_INTERVAL_MS = 500
+
+let markEventPollerHandle: NodeJS.Timeout | null = null
+
+export function startMarkEventPoller(): void {
+  if (markEventPollerHandle) return
+  markEventPollerHandle = setInterval(() => {
+    let events: ReturnType<typeof drainMarkEventQueue>
+    try {
+      events = drainMarkEventQueue()
+    } catch (err) {
+      console.error('[mark-event-poller] drain failed:', err)
+      return
+    }
+    if (events.length === 0) return
+    const seen = new Set<string>()
+    for (const e of events) {
+      if (seen.has(e.documentId)) continue
+      seen.add(e.documentId)
+      broadcastAnnotationsChanged({ documentId: e.documentId })
+    }
+  }, MARK_EVENT_POLL_INTERVAL_MS)
+}
+
+export function stopMarkEventPoller(): void {
+  if (!markEventPollerHandle) return
+  clearInterval(markEventPollerHandle)
+  markEventPollerHandle = null
+}
 
 export function registerIpcHandlers(): void {
   ipcMain.on('ping', () => console.log('pong'))
+
+  startMarkEventPoller()
 
   ipcMain.handle('pdf:open', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({

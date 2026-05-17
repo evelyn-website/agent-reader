@@ -371,6 +371,30 @@ export function deleteAnnotation(id: string): void {
   getDb().prepare(`DELETE FROM annotations WHERE id = ?`).run(id)
 }
 
+export interface MarkEvent {
+  id: string
+  documentId: string
+}
+
+interface MarkEventRow {
+  id: string
+  document_id: string
+  created_at: number
+}
+
+export function drainMarkEventQueue(): MarkEvent[] {
+  const d = getDb()
+  const select = d.prepare<[], MarkEventRow>(`SELECT * FROM mark_event_queue ORDER BY created_at`)
+  const clear = d.prepare(`DELETE FROM mark_event_queue`)
+  const tx = d.transaction((): MarkEvent[] => {
+    const rows = select.all()
+    if (rows.length === 0) return []
+    clear.run()
+    return rows.map((r) => ({ id: r.id, documentId: r.document_id }))
+  })
+  return tx()
+}
+
 export function recordProjectOpen(args: { path: string; name: string }): ProjectRow {
   const d = getDb()
   const now = Date.now()

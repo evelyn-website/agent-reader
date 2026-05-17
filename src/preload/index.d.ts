@@ -24,6 +24,7 @@ declare global {
         create: (input: CreateAnnotationInput) => Promise<AnnotationRow>
         update: (id: string, patch: UpdateAnnotationInput) => Promise<AnnotationRow | null>
         delete: (id: string) => Promise<null>
+        onChanged: (handler: (event: { documentId: string }) => void) => () => void
       }
       chat: {
         sessions: {

@@ -83,17 +83,24 @@ export function useAnnotations(documentId: string | null): UseAnnotationsResult 
   const [annotations, setAnnotations] = useState<Annotation[]>([])
 
   useEffect(() => {
-    let cancelled = false
     if (!documentId) return
-    window.api.annotations
-      .list(documentId)
-      .then((rows) => {
-        if (cancelled) return
-        setAnnotations(rows.map(rowToAnnotation))
-      })
-      .catch((err) => console.error('annotations list failed:', err))
+    let cancelled = false
+    const refetch = (): void => {
+      window.api.annotations
+        .list(documentId)
+        .then((rows) => {
+          if (cancelled) return
+          setAnnotations(rows.map(rowToAnnotation))
+        })
+        .catch((err) => console.error('annotations list failed:', err))
+    }
+    refetch()
+    const unsubscribe = window.api.annotations.onChanged((event) => {
+      if (event.documentId === documentId) refetch()
+    })
     return () => {
       cancelled = true
+      unsubscribe()
       setAnnotations([])
     }
   }, [documentId])

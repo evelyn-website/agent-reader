@@ -884,6 +884,25 @@ body {
   background: rgba(255, 160, 60, 0.5);
 }
 
+.annotation-highlight-fallback {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  background: var(--highlight-yellow, #ffeb3b);
+  border-radius: 3px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  opacity: 0.85;
+}
+
+.annotation-highlight-fallback:hover {
+  opacity: 1;
+}
+
 .annotation-pin {
   position: absolute;
   width: 12px;

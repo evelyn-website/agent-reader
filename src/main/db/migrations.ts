@@ -104,6 +104,15 @@ const migrations: Migration[] = [
         ON chat_messages(session_id, jsonl_uuid)
         WHERE jsonl_uuid IS NOT NULL;
     `)
+  },
+  (db) => {
+    db.exec(`
+      CREATE TABLE mark_event_queue (
+        id          TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL,
+        created_at  INTEGER NOT NULL
+      );
+    `)
   }
 ]
 

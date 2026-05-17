@@ -23,6 +23,7 @@ export type PtyAttachResult =
 export type PtyDataEvent = { sessionId: string; data: string }
 export type PtyExitEvent = { sessionId: string; exitCode: number; signal?: number }
 export type SessionsChangedEvent = { sessionId: string; scopeKey: string }
+export type AnnotationsChangedEvent = { documentId: string }
 export type ActiveLocationPayload = {
   documentId: string | null
   page: number | null
@@ -39,7 +40,13 @@ const api = {
       ipcRenderer.invoke('annotations:create', input),
     update: (id: string, patch: UpdateAnnotationInput): Promise<AnnotationRow | null> =>
       ipcRenderer.invoke('annotations:update', id, patch),
-    delete: (id: string): Promise<null> => ipcRenderer.invoke('annotations:delete', id)
+    delete: (id: string): Promise<null> => ipcRenderer.invoke('annotations:delete', id),
+    onChanged: (handler: (event: AnnotationsChangedEvent) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, payload: AnnotationsChangedEvent): void =>
+        handler(payload)
+      ipcRenderer.on('annotations:changed', listener)
+      return () => ipcRenderer.removeListener('annotations:changed', listener)
+    }
   },
   chat: {
     sessions: {

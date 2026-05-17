@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { initDb } from './db'
-import { registerIpcHandlers } from './ipc'
+import { registerIpcHandlers, stopMarkEventPoller } from './ipc'
 import { chatPtyManager } from './pty/manager'
 import { shutdownSessionIdChannel } from './chat/sessionIdChannel'
 import { stopAllJsonlHydrators } from './chat/jsonlHydrator'
@@ -98,6 +98,7 @@ app.on('before-quit', () => {
   chatPtyManager.killAll()
   stopAllJsonlHydrators()
   shutdownSessionIdChannel()
+  stopMarkEventPoller()
 })
 
 // In this file you can include the rest of your app's specific main process
