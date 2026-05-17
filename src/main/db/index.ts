@@ -275,13 +275,15 @@ export function listChatMessages(sessionId: string): ChatMessageRow[] {
 }
 
 export function getLastAssistantMessage(sessionId: string): ChatMessageRow | null {
-  return getDb()
-    .prepare<[string], ChatMessageRow>(
-      `SELECT * FROM chat_messages
+  return (
+    getDb()
+      .prepare<[string], ChatMessageRow>(
+        `SELECT * FROM chat_messages
        WHERE session_id = ? AND role = 'assistant'
        ORDER BY created_at DESC, id DESC LIMIT 1`
-    )
-    .get(sessionId) ?? null
+      )
+      .get(sessionId) ?? null
+  )
 }
 
 export function createChatMessage(input: CreateChatMessageInput): ChatMessageRow {

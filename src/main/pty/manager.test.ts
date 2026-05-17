@@ -306,6 +306,56 @@ describe('ChatPtyManager', () => {
     expect(args[resumeIdx + 1]).toBe('resumed-uuid-7')
   })
 
+  it('adds --append-system-prompt on new sessions but not resumed sessions', () => {
+    vi.mocked(db.getChatSession).mockReturnValueOnce({
+      id: 's1',
+      scope_key: '/project',
+      title: 't',
+      origin_document_id: 'doc-abc',
+      origin_page_number: 42,
+      origin_text_excerpt: null,
+      claude_session_id: null,
+      created_at: 0,
+      updated_at: 0,
+      last_message_at: null
+    } as never)
+    const wc = makeWebContents()
+    const result = manager.attach('s1', wc as never, 80, 24)
+    expect(result.ok).toBe(true)
+
+    const args = spawnHarness.calls[0].args
+    const promptIdx = args.indexOf('--append-system-prompt')
+    expect(promptIdx).toBeGreaterThanOrEqual(0)
+    const prompt = args[promptIdx + 1]
+    expect(prompt).toContain('agent-reader')
+    expect(prompt).toContain('get_page')
+    expect(prompt).toContain('search_text')
+    expect(prompt).toContain('save_note')
+    expect(prompt).toContain('save_highlight')
+    expect(prompt).toContain('doc-abc')
+    expect(prompt).toContain('page 42')
+
+    // Resumed sessions should not have --append-system-prompt
+    vi.mocked(db.getChatSession).mockReturnValueOnce({
+      id: 's2',
+      scope_key: '/project',
+      title: 't',
+      origin_document_id: null,
+      origin_page_number: null,
+      origin_text_excerpt: null,
+      claude_session_id: 'existing-uuid',
+      created_at: 0,
+      updated_at: 0,
+      last_message_at: null
+    } as never)
+    const wc2 = makeWebContents()
+    manager.attach('s2', wc2 as never, 80, 24)
+
+    const args2 = spawnHarness.calls[1].args
+    const promptIdx2 = args2.indexOf('--append-system-prompt')
+    expect(promptIdx2).toBe(-1)
+  })
+
   it('cleans up the entry when the pty exits on its own', () => {
     const wc = makeWebContents()
     manager.attach('s1', wc as never, 80, 24)

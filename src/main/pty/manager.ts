@@ -102,6 +102,9 @@ class ChatPtyManager {
       } else {
         debug('skipping --mcp-config: db path unknown (likely test harness)')
       }
+      if (!session.claude_session_id) {
+        args.push('--append-system-prompt', buildSystemPrompt(session))
+      }
       if (session.claude_session_id) {
         args.unshift('--resume', session.claude_session_id)
         resumed = true
@@ -305,6 +308,23 @@ function buildSettingsJson(): string {
       ]
     }
   })
+}
+
+function buildSystemPrompt(session: { origin_document_id: string | null; origin_page_number: number | null }): string {
+  const docNote = session.origin_document_id
+    ? ` This session was opened from document ID ${session.origin_document_id}` +
+      (session.origin_page_number ? `, page ${session.origin_page_number}.` : '.')
+    : ''
+
+  return [
+    'You are running inside agent-reader, a PDF reading app.',
+    'You have MCP tools for the open document:',
+    '  • get_page / get_pages — read page text (call get_page({}) for the current page)',
+    '  • search_text — search across all pages',
+    '  • save_note / save_highlight — save findings as marks on the page',
+    'When the user asks about document content, use these tools first rather than relying on general knowledge.',
+    docNote
+  ].filter(Boolean).join(' ')
 }
 
 function shellEscape(arg: string): string {
