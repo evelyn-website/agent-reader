@@ -10,17 +10,16 @@ function setViewportWidth(width: number): void {
   })
 }
 
-function pressMetaKey(key: string, shiftKey = false): void {
-  window.dispatchEvent(new KeyboardEvent('keydown', { key, metaKey: true, shiftKey }))
-}
-
 describe('useSidePanels', () => {
   beforeEach(() => {
     window.localStorage.clear()
     setViewportWidth(1300)
   })
 
-  it('handles keyboard shortcuts for tabs, panel toggles, and focus mode', () => {
+  it('exposes imperative panel/tab/focus-mode controls', () => {
+    // Keyboard dispatch lives in the command registry now; this hook is a
+    // pure state container surfaced as imperative methods that the App
+    // registers as commands.
     const { result } = renderHook(() => useSidePanels())
 
     expect(result.current.leftOpen).toBe(true)
@@ -28,25 +27,26 @@ describe('useSidePanels', () => {
     expect(result.current.leftTab).toBe('toc')
     expect(result.current.rightTab).toBe('chat')
 
-    act(() => pressMetaKey('1'))
+    act(() => result.current.focusLeftTab('files'))
     expect(result.current.leftTab).toBe('files')
     expect(result.current.leftOpen).toBe(true)
 
-    act(() => pressMetaKey('@', true))
+    act(() => result.current.focusRightTab('marks'))
     expect(result.current.rightTab).toBe('marks')
     expect(result.current.rightOpen).toBe(true)
 
-    act(() => pressMetaKey('\\'))
+    act(() => result.current.toggleLeft())
     expect(result.current.leftOpen).toBe(false)
 
-    act(() => pressMetaKey('\\', true))
+    act(() => result.current.toggleRight())
     expect(result.current.rightOpen).toBe(false)
 
-    act(() => pressMetaKey('b'))
+    act(() => result.current.toggleFocusMode())
     expect(result.current.leftOpen).toBe(false)
     expect(result.current.rightOpen).toBe(false)
 
-    act(() => pressMetaKey('b'))
+    // Second toggle restores the snapshot captured before entering focus mode.
+    act(() => result.current.toggleFocusMode())
     expect(result.current.leftOpen).toBe(false)
     expect(result.current.rightOpen).toBe(false)
   })

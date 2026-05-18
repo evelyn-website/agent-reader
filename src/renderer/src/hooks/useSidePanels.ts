@@ -33,6 +33,7 @@ export function useSidePanels(): {
   setRightTab: (id: RightTabId) => void
   toggleLeft: () => void
   toggleRight: () => void
+  toggleFocusMode: () => void
   focusLeftTab: (id: LeftTabId) => void
   focusRightTab: (id: RightTabId) => void
 } {
@@ -77,39 +78,6 @@ export function useSidePanels(): {
   }, [leftOpen, rightOpen])
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (!e.metaKey || e.altKey || e.ctrlKey) return
-      const shift = e.shiftKey
-      const k = e.key
-
-      if (k === '\\') {
-        e.preventDefault()
-        if (shift) toggleRight()
-        else toggleLeft()
-        return
-      }
-      if (!shift && k === 'b') {
-        e.preventDefault()
-        toggleFocusMode()
-        return
-      }
-      if (!shift && (k === '1' || k === '2')) {
-        e.preventDefault()
-        focusLeftTab(k === '1' ? 'files' : 'toc')
-        return
-      }
-      if (shift && (k === '1' || k === '!' || k === '2' || k === '@')) {
-        e.preventDefault()
-        const isOne = k === '1' || k === '!'
-        focusRightTab(isOne ? 'chat' : 'marks')
-        return
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [toggleLeft, toggleRight, toggleFocusMode, focusLeftTab, focusRightTab])
-
-  useEffect(() => {
     const check = (): void => {
       const w = window.innerWidth
       const leftW = leftOpenRef.current ? readPanelWidth('left') : 0
@@ -138,6 +106,7 @@ export function useSidePanels(): {
     setRightTab,
     toggleLeft,
     toggleRight,
+    toggleFocusMode,
     focusLeftTab,
     focusRightTab
   }
