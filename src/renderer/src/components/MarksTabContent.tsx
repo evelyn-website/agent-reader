@@ -7,7 +7,7 @@ import {
 } from './useAnnotations'
 import { AllIcon, ClockIcon, HighlightIcon, NoteIcon, PageIcon, TrashIcon } from './icons'
 import type { ProjectMarkSummary } from '../../../shared/dbTypes'
-import { emptyMessage, formatRelativeTime } from './marksTabUtils'
+import { emptyMessage, formatRelativeTime, stripMarkdown } from './marksTabUtils'
 
 type KindFilter = 'all' | 'highlight' | 'note'
 type SortMode = 'page' | 'recent'
@@ -252,9 +252,9 @@ function MarkRow({ annotation, onJump, onDelete, pageLabel }: RowProps): React.J
   const primary = isHighlight
     ? (annotation.textExcerpt ?? '')
     : hasComment
-      ? annotation.comment!
+      ? stripMarkdown(annotation.comment!)
       : ''
-  const secondary = isHighlight && hasComment ? annotation.comment! : null
+  const secondary = isHighlight && hasComment ? stripMarkdown(annotation.comment!) : null
 
   return (
     <div

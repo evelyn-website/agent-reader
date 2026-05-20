@@ -22,3 +22,13 @@ export function emptyMessage(kind: KindFilter, color: HighlightColor | null): st
   if (kind === 'note') return 'No notes yet'
   return 'No marks yet'
 }
+
+export function stripMarkdown(s: string): string {
+  return s
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\n/g, ' ')
+    .trim()
+}

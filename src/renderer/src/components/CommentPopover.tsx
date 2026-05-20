@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { HIGHLIGHT_COLORS, type Annotation, type HighlightColor } from './useAnnotations'
+import MarkdownText from './MarkdownText'
 
 interface CommentPopoverProps {
   annotation: Annotation
@@ -130,19 +131,8 @@ export default function CommentPopover({
           }}
         />
       ) : (
-        <div
-          className="annotation-popover__body"
-          onClick={() => setMode('edit')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              setMode('edit')
-            }
-          }}
-        >
-          {annotation.comment}
+        <div className="annotation-popover__body">
+          <MarkdownText text={annotation.comment ?? ''} />
         </div>
       )}
       <div className="annotation-popover__actions">

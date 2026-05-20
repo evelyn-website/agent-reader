@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import MarksTabContent from './MarksTabContent'
-import { formatRelativeTime, emptyMessage } from './marksTabUtils'
+import { formatRelativeTime, emptyMessage, stripMarkdown } from './marksTabUtils'
 import type { Annotation, UseAnnotationsResult } from './useAnnotations'
 import type { ProjectMarkSummary } from '../../../shared/dbTypes'
 
@@ -86,6 +86,48 @@ describe('emptyMessage', () => {
   it('returns "No {color} highlights" when color is set', () => {
     expect(emptyMessage('all', 'yellow')).toBe('No yellow highlights')
     expect(emptyMessage('highlight', 'blue')).toBe('No blue highlights')
+  })
+})
+
+describe('stripMarkdown', () => {
+  it('removes bold markdown', () => {
+    expect(stripMarkdown('**bold text**')).toBe('bold text')
+  })
+
+  it('removes italic markdown', () => {
+    expect(stripMarkdown('*italic text*')).toBe('italic text')
+  })
+
+  it('removes underline markdown', () => {
+    expect(stripMarkdown('__underlined__')).toBe('underlined')
+  })
+
+  it('converts links to labels only', () => {
+    expect(stripMarkdown('[click me](https://example.com)')).toBe('click me')
+  })
+
+  it('collapses newlines to spaces', () => {
+    expect(stripMarkdown('line1\nline2\nline3')).toBe('line1 line2 line3')
+  })
+
+  it('handles mixed markdown tokens', () => {
+    expect(stripMarkdown('**bold** and *italic* and __underline__')).toBe(
+      'bold and italic and underline'
+    )
+  })
+
+  it('strips markdown and collapses mixed multi-line', () => {
+    expect(stripMarkdown('**bold**\n*italic*\n[link](http://x.com)')).toBe(
+      'bold italic link'
+    )
+  })
+
+  it('trims leading/trailing whitespace', () => {
+    expect(stripMarkdown('  **bold**  ')).toBe('bold')
+  })
+
+  it('handles plain text unchanged', () => {
+    expect(stripMarkdown('plain text')).toBe('plain text')
   })
 })
 

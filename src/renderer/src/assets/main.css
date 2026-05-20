@@ -973,8 +973,8 @@ body {
   border-radius: 10px;
   box-shadow: var(--shadow-popover);
   padding: 10px 12px 12px;
-  min-width: 260px;
-  max-width: 340px;
+  min-width: 360px;
+  max-width: 500px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1068,15 +1068,51 @@ body {
   color: var(--text-primary);
   padding: 8px 10px;
   border-radius: 6px;
-  white-space: pre-wrap;
+  white-space: normal;
   word-break: break-word;
   cursor: text;
   min-height: 36px;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   transition: background-color 80ms ease-out;
 }
 
 .annotation-popover__body:hover {
   background: rgba(255, 255, 255, 0.03);
+}
+
+.annotation-popover__body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.annotation-popover__body::-webkit-scrollbar-thumb {
+  background: var(--surface-hover);
+  border-radius: 2px;
+}
+
+.annotation-popover__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.annotation-popover__body strong {
+  font-weight: 600;
+}
+
+.annotation-popover__body em {
+  font-style: italic;
+}
+
+.annotation-popover__body .md-link {
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 80ms ease-out;
+}
+
+.annotation-popover__body .md-link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
 }
 
 .annotation-popover__actions {
