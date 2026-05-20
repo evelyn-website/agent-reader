@@ -167,6 +167,8 @@ function useRectlessHighlightRects(
     const root = rootRef.current
     let cancelled = false
     let observer: MutationObserver | null = null
+    let timeoutId: number | null = null
+    const startTime = performance.now()
 
     const compute = (): boolean => {
       if (cancelled) return true
@@ -174,59 +176,54 @@ function useRectlessHighlightRects(
         setDerived((prev) => (prev.size === 0 ? prev : new Map()))
         return true
       }
-      if (!root) {
-        if (DEBUG) console.log('[hl-match] no root')
-        return false
-      }
+      if (!root) return false
       const textLayer = findVisibleTextLayer(root)
-      if (!textLayer) {
-        if (DEBUG) console.log('[hl-match] no visible textLayer', { rectless: rectless.length })
-        return false
-      }
+      if (!textLayer) return false
       const layerRect = textLayer.getBoundingClientRect()
-      if (layerRect.width === 0 || layerRect.height === 0) {
-        if (DEBUG) console.log('[hl-match] textLayer has zero size', layerRect)
-        return false
-      }
+      if (layerRect.width === 0 || layerRect.height === 0) return false
+      const layerText = textLayer.textContent ?? ''
+      if (layerText.trim().length === 0) return false
       const next = new Map<string, UnscaledRect[]>()
       for (const a of rectless) {
         const rects = findTextRects(textLayer, a.textExcerpt!, layerRect, scale)
-        if (DEBUG) {
-          const layerText = textLayer.textContent ?? ''
-          const norm = layerText.replace(/\s+/g, ' ').trim().toLowerCase()
-          const needle = a.textExcerpt!.replace(/\s+/g, ' ').trim().toLowerCase()
-          console.log('[hl-match]', {
-            id: a.id,
-            page: a.pageNumber,
-            matched: rects.length,
-            needleLen: needle.length,
-            layerTextLen: norm.length,
-            naiveIdx: norm.indexOf(needle),
-            needleSample: needle.slice(0, 60),
-            layerSample: norm.slice(0, 80)
-          })
-        }
         if (rects.length > 0) next.set(a.id, rects)
       }
-      setDerived(next)
-      return true
+      setDerived((prev) => {
+        if (prev.size === 0 && next.size === 0) return prev
+        return next
+      })
+      const elapsed = performance.now() - startTime
+      const done = next.size === rectless.length || elapsed > 3000
+      if (DEBUG && done) {
+        console.log(
+          `[hl-match] ${next.size}/${rectless.length} matched in ${elapsed.toFixed(0)}ms` +
+            (next.size < rectless.length ? ' (timeout)' : '')
+        )
+      }
+      return done
     }
 
-    // Defer to a microtask so the initial pass doesn't setState synchronously
-    // inside the effect body (eslint react-hooks/set-state-in-effect).
     queueMicrotask(() => {
       if (compute()) return
       const pageWrapper = root?.closest('.pdf-page-wrapper') ?? null
       if (!pageWrapper) return
       observer = new MutationObserver(() => {
-        if (compute()) observer?.disconnect()
+        if (compute()) {
+          observer?.disconnect()
+          if (timeoutId !== null) clearTimeout(timeoutId)
+        }
       })
       observer.observe(pageWrapper, { childList: true, subtree: true })
+      timeoutId = window.setTimeout(() => {
+        compute()
+        observer?.disconnect()
+      }, 3000)
     })
 
     return () => {
       cancelled = true
       observer?.disconnect()
+      if (timeoutId !== null) clearTimeout(timeoutId)
     }
   }, [rectless, scale, rootRef])
 
