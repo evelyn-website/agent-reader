@@ -8,6 +8,7 @@ export interface BuildMcpConfigInput {
   electronExecPath: string
   scriptPath?: string
   activeLocationFilePath?: string
+  projectPath?: string | null
 }
 
 /**
@@ -32,7 +33,8 @@ export function buildMcpConfig(input: BuildMcpConfigInput): string {
           AR_SESSION_ORIGIN_PAGE:
             input.session.origin_page_number !== null
               ? String(input.session.origin_page_number)
-              : ''
+              : '',
+          AR_PROJECT_PATH: input.projectPath ?? ''
         }
       }
     }

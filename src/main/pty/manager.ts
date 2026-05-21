@@ -96,7 +96,8 @@ class ChatPtyManager {
         const mcpConfig = buildMcpConfig({
           session,
           dbPath,
-          electronExecPath: process.execPath
+          electronExecPath: process.execPath,
+          projectPath: resolveSessionCwd(session)
         })
         args.push('--mcp-config', mcpConfig)
       } else {

@@ -52,6 +52,7 @@ export interface CreateServerOptions {
   activeLocationPath: string | null
   originDocId: string | null
   originPage: number | null
+  projectPath: string | null
 }
 
 export interface Server {
@@ -148,6 +149,16 @@ export const TOOLS = [
     }
   },
   {
+    name: 'list_documents',
+    description:
+      'Return all documents that have been opened in the project. Each entry has { id, filename, last_path, open_count }. Use the id to reference a document in get_page, search_text, get_outline, etc.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      required: []
+    }
+  },
+  {
     name: 'save_highlight',
     description:
       'Save a highlight as a Mark on the underlying PDF. Provide the highlighted text and choose an anchor ("origin", "current", or an explicit { document_id, page }). Optional color and note are stored on the highlight.',
@@ -217,8 +228,15 @@ interface MarkRow {
   comment: string | null
 }
 
+interface DocumentRow {
+  id: string
+  filename: string
+  last_path: string
+  open_count: number
+}
+
 export function createServer(opts: CreateServerOptions): Server {
-  const { db, activeLocationPath, originDocId, originPage } = opts
+  const { db, activeLocationPath, originDocId, originPage, projectPath } = opts
 
   function readActiveLocation(): ActiveLocation | null {
     if (!activeLocationPath || !existsSync(activeLocationPath)) return null
@@ -406,6 +424,25 @@ export function createServer(opts: CreateServerOptions): Server {
         }
         return textResult(JSON.stringify(matches))
       }
+      case 'list_documents': {
+        const rows = projectPath
+          ? db
+              .prepare<[string, string], DocumentRow>(
+                `SELECT id, filename, last_path, open_count
+                 FROM documents
+                 WHERE last_path = ? OR last_path LIKE ? ESCAPE '\\'
+                 ORDER BY last_opened_at DESC`
+              )
+              .all(projectPath, projectPath.replace(/[%_\\]/g, '\\$&') + '/%')
+          : db
+              .prepare<[], DocumentRow>(
+                `SELECT id, filename, last_path, open_count
+                 FROM documents
+                 ORDER BY last_opened_at DESC`
+              )
+              .all()
+        return textResult(JSON.stringify(rows))
+      }
       case 'save_note': {
         const { documentId, page } = resolveAnchor(args.anchor)
         const row = insertAnnotation({
@@ -527,7 +564,8 @@ if (require.main === module) {
     db,
     activeLocationPath: process.env.AR_ACTIVE_LOCATION_FILE || null,
     originDocId: process.env.AR_SESSION_ORIGIN_DOC_ID || null,
-    originPage: originPageRaw ? Number(originPageRaw) : null
+    originPage: originPageRaw ? Number(originPageRaw) : null,
+    projectPath: process.env.AR_PROJECT_PATH || null
   })
 
   function send(msg: JsonRpcResponse): void {

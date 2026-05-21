@@ -48,7 +48,8 @@ describe('mcp-server', () => {
       db,
       activeLocationPath: opts.activeLocationPath ?? null,
       originDocId: opts.originDocId ?? null,
-      originPage: opts.originPage ?? null
+      originPage: opts.originPage ?? null,
+      projectPath: opts.projectPath ?? null
     })
   }
 
@@ -70,7 +71,7 @@ describe('mcp-server', () => {
         result: { tools: Array<{ name: string }> }
       }
       const names = resp.result.tools.map((t) => t.name).sort()
-      expect(names).toEqual(['get_outline', 'get_page', 'get_pages', 'save_highlight', 'save_note', 'search_text'])
+      expect(names).toEqual(['get_outline', 'get_page', 'get_pages', 'list_documents', 'save_highlight', 'save_note', 'search_text'])
     })
   })
 
@@ -359,6 +360,52 @@ describe('mcp-server', () => {
       const s = build()
       const r = s.handleToolCall('get_outline', {})
       expect(r.isError).toBe(true)
+    })
+  })
+
+  describe('list_documents', () => {
+    beforeEach(() => {
+      // Add a document outside /tmp to test project scoping
+      db.prepare(
+        `INSERT INTO documents (id, filename, last_path, size_bytes, first_opened_at, last_opened_at, open_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run('doc-C', 'c.pdf', '/other/c.pdf', 3000, 0, 0, 1)
+    })
+
+    it('returns only documents under projectPath when set', () => {
+      const s = build({ projectPath: '/tmp' })
+      const r = s.handleToolCall('list_documents', {})
+      const docs = JSON.parse(r.content[0].text) as Array<{ id: string }>
+      const ids = docs.map((d) => d.id).sort()
+      expect(ids).toEqual(['doc-A', 'doc-B'])
+    })
+
+    it('returns all documents when no projectPath', () => {
+      const s = build()
+      const r = s.handleToolCall('list_documents', {})
+      const docs = JSON.parse(r.content[0].text) as Array<{ id: string }>
+      expect(docs).toHaveLength(3)
+    })
+
+    it('returns id, filename, last_path, open_count fields', () => {
+      const s = build({ projectPath: '/tmp' })
+      const r = s.handleToolCall('list_documents', {})
+      const docs = JSON.parse(r.content[0].text) as Array<{
+        id: string
+        filename: string
+        last_path: string
+        open_count: number
+      }>
+      const docA = docs.find((d) => d.id === 'doc-A')!
+      expect(docA.filename).toBe('a.pdf')
+      expect(docA.last_path).toBe('/tmp/a.pdf')
+      expect(docA.open_count).toBe(1)
+    })
+
+    it('returns empty array when no documents match projectPath', () => {
+      const s = build({ projectPath: '/nonexistent' })
+      const r = s.handleToolCall('list_documents', {})
+      expect(JSON.parse(r.content[0].text)).toEqual([])
     })
   })
 })
