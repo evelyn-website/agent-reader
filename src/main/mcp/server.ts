@@ -65,7 +65,7 @@ export const TOOLS = [
   {
     name: 'get_page',
     description:
-      'Return the extracted text of a single page from the active PDF. If page is omitted, returns the page the user is currently viewing. If document_id is omitted, uses the currently-focused document. Page numbers are 1-based.',
+      'Return the extracted text and marks of a single page from the active PDF. If page is omitted, returns the page the user is currently viewing. If document_id is omitted, uses the currently-focused document. Page numbers are 1-based. Returns { text, marks } where marks is an array of { id, kind, color, text_excerpt, comment }.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -84,7 +84,7 @@ export const TOOLS = [
   {
     name: 'get_pages',
     description:
-      'Return the extracted text of several pages. Each entry in the result has { page, text }. Pages with no text-layer index return null.',
+      'Return the extracted text and marks of several pages. Each entry in the result has { page, text, marks } where marks is an array of { id, kind, color, text_excerpt, comment }. Pages with no text-layer index return null text.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -190,6 +190,14 @@ interface AnnotationRow {
   id: string
 }
 
+interface MarkRow {
+  id: string
+  kind: string
+  color: string | null
+  text_excerpt: string | null
+  comment: string | null
+}
+
 export function createServer(opts: CreateServerOptions): Server {
   const { db, activeLocationPath, originDocId, originPage } = opts
 
@@ -255,6 +263,17 @@ export function createServer(opts: CreateServerOptions): Server {
     }
   }
 
+  function getPageMarks(documentId: string, page: number): MarkRow[] {
+    return db
+      .prepare<[string, number], MarkRow>(
+        `SELECT id, kind, color, text_excerpt, comment
+         FROM annotations
+         WHERE document_id = ? AND page_number = ?
+         ORDER BY created_at`
+      )
+      .all(documentId, page)
+  }
+
   function insertAnnotation(input: InsertAnnotationInput): AnnotationRow {
     const id = randomUUID()
     const now = Date.now()
@@ -312,7 +331,8 @@ export function createServer(opts: CreateServerOptions): Server {
         if (page < 1 || page > numPages) {
           return textResult(`Page ${page} is out of range (document has ${numPages} pages).`)
         }
-        return textResult(pages[page] || '')
+        const marks = getPageMarks(docId, page)
+        return textResult(JSON.stringify({ text: pages[page] || '', marks }))
       }
       case 'get_pages': {
         const docId = resolveDocumentId(args.document_id)
@@ -322,8 +342,8 @@ export function createServer(opts: CreateServerOptions): Server {
         const requested = Array.isArray(args.pages) ? args.pages : []
         const out = requested.map((p) => {
           const n = Number(p)
-          if (n < 1 || n > numPages) return { page: n, text: null }
-          return { page: n, text: pages[n] || '' }
+          if (n < 1 || n > numPages) return { page: n, text: null, marks: [] }
+          return { page: n, text: pages[n] || '', marks: getPageMarks(docId, n) }
         })
         return textResult(JSON.stringify(out))
       }

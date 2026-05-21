@@ -75,17 +75,20 @@ describe('mcp-server', () => {
   })
 
   describe('get_page', () => {
-    it('returns the page text for an explicit document_id', () => {
+    it('returns { text, marks } for an explicit document_id', () => {
       const s = build()
       const r = s.handleToolCall('get_page', { document_id: 'doc-A', page: 2 })
-      expect(r.content[0].text).toBe('Second page about AGENTS')
+      const parsed = JSON.parse(r.content[0].text)
+      expect(parsed.text).toBe('Second page about AGENTS')
+      expect(parsed.marks).toEqual([])
     })
 
     it('falls back to the active-location documentId when document_id is omitted', () => {
       writeFileSync(locPath, JSON.stringify({ documentId: 'doc-A', page: 1 }), 'utf8')
       const s = build({ activeLocationPath: locPath })
       const r = s.handleToolCall('get_page', { page: 1 })
-      expect(r.content[0].text).toBe('Hello world')
+      const parsed = JSON.parse(r.content[0].text)
+      expect(parsed.text).toBe('Hello world')
     })
 
     it('errors when no document_id and no active location', () => {
@@ -99,7 +102,8 @@ describe('mcp-server', () => {
       writeFileSync(locPath, JSON.stringify({ documentId: 'doc-A', page: 2 }), 'utf8')
       const s = build({ activeLocationPath: locPath })
       const r = s.handleToolCall('get_page', {})
-      expect(r.content[0].text).toBe('Second page about AGENTS')
+      const parsed = JSON.parse(r.content[0].text)
+      expect(parsed.text).toBe('Second page about AGENTS')
     })
 
     it('errors when page is omitted and no active location exists', () => {
@@ -112,6 +116,66 @@ describe('mcp-server', () => {
       const s = build()
       const r = s.handleToolCall('get_page', { document_id: 'doc-A', page: 99 })
       expect(r.content[0].text).toMatch(/out of range/)
+    })
+
+    it('includes marks that exist on the page', () => {
+      db.prepare(
+        `INSERT INTO annotations (id, document_id, page_number, kind, color, rects_json, anchor_x, anchor_y, text_excerpt, comment, created_at, updated_at)
+         VALUES ('ann-1', 'doc-A', 1, 'highlight', 'yellow', NULL, NULL, NULL, 'Hello world', 'a greeting', 1, 1)`
+      ).run()
+      const s = build()
+      const r = s.handleToolCall('get_page', { document_id: 'doc-A', page: 1 })
+      const parsed = JSON.parse(r.content[0].text)
+      expect(parsed.marks).toHaveLength(1)
+      expect(parsed.marks[0]).toEqual({
+        id: 'ann-1',
+        kind: 'highlight',
+        color: 'yellow',
+        text_excerpt: 'Hello world',
+        comment: 'a greeting'
+      })
+    })
+
+    it('does not include marks from other pages', () => {
+      db.prepare(
+        `INSERT INTO annotations (id, document_id, page_number, kind, color, rects_json, anchor_x, anchor_y, text_excerpt, comment, created_at, updated_at)
+         VALUES ('ann-2', 'doc-A', 2, 'note', NULL, NULL, 10, 10, NULL, 'page 2 note', 1, 1)`
+      ).run()
+      const s = build()
+      const r = s.handleToolCall('get_page', { document_id: 'doc-A', page: 1 })
+      const parsed = JSON.parse(r.content[0].text)
+      expect(parsed.marks).toHaveLength(0)
+    })
+  })
+
+  describe('get_pages', () => {
+    it('returns { page, text, marks } for each requested page', () => {
+      const s = build()
+      const r = s.handleToolCall('get_pages', { document_id: 'doc-A', pages: [1, 2] })
+      const parsed = JSON.parse(r.content[0].text)
+      expect(parsed).toHaveLength(2)
+      expect(parsed[0]).toEqual({ page: 1, text: 'Hello world', marks: [] })
+      expect(parsed[1]).toEqual({ page: 2, text: 'Second page about AGENTS', marks: [] })
+    })
+
+    it('includes marks on the relevant pages', () => {
+      db.prepare(
+        `INSERT INTO annotations (id, document_id, page_number, kind, color, rects_json, anchor_x, anchor_y, text_excerpt, comment, created_at, updated_at)
+         VALUES ('ann-p1', 'doc-A', 1, 'note', NULL, NULL, 5, 5, NULL, 'my note', 1, 1)`
+      ).run()
+      const s = build()
+      const r = s.handleToolCall('get_pages', { document_id: 'doc-A', pages: [1, 2] })
+      const parsed = JSON.parse(r.content[0].text)
+      expect(parsed[0].marks).toHaveLength(1)
+      expect(parsed[0].marks[0].id).toBe('ann-p1')
+      expect(parsed[1].marks).toHaveLength(0)
+    })
+
+    it('returns empty marks array for out-of-range pages', () => {
+      const s = build()
+      const r = s.handleToolCall('get_pages', { document_id: 'doc-A', pages: [99] })
+      const parsed = JSON.parse(r.content[0].text)
+      expect(parsed[0]).toEqual({ page: 99, text: null, marks: [] })
     })
   })
 

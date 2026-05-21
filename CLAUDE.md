@@ -9,7 +9,11 @@ Architecture and cross-cutting concepts: `~/kb/` (use the `kb` CLI)
 
 This project uses [Chainlink](https://github.com/dollspace-gay/chainlink) for issue tracking and session handoffs. The DB lives in `.chainlink/` (gitignored).
 
-**Starting a work session** — run these when you're sitting down to work on something:
+**Starting a work session** — when the user is about to do work, first check if a session is already active:
+```bash
+chainlink session status
+```
+If one is active, continue it. If not, start one:
 ```bash
 chainlink session start
 chainlink next          # see what's ready to work on
