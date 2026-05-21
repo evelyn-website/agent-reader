@@ -67,7 +67,7 @@ interface SwappablePageProps {
   scale: number
   onRendered: (height: number) => void
   customTextRenderer?: TextRenderer
-  renderOverlay?: (frontScale: number) => React.ReactNode
+  renderOverlay?: (overlayScale: number) => React.ReactNode
 }
 
 const BACK_SLOT_TEARDOWN_MS = 500
@@ -157,39 +157,45 @@ function SwappablePage({
   const previewZoom = scale / frontScale
 
   return (
-    <div
-      style={{
-        position: 'relative',
-        ...(previewZoom === 1 ? undefined : { zoom: previewZoom })
-      }}
-    >
-      {slots.a !== null && (
-        <div ref={slotARef} style={front === 'a' ? undefined : HIDDEN_STYLE}>
-          <Page
-            key={`${documentId}-a-${slots.a}`}
-            pageNumber={pageNumber}
-            scale={slots.a}
-            renderTextLayer={true}
-            renderAnnotationLayer={true}
-            customTextRenderer={customTextRenderer}
-            onRenderSuccess={({ height }) => handleRendered('a', slots.a!, height)}
-          />
+    <div style={{ position: 'relative' }}>
+      <div
+        style={{
+          position: 'relative',
+          ...(previewZoom === 1 ? undefined : { zoom: previewZoom })
+        }}
+      >
+        {slots.a !== null && (
+          <div ref={slotARef} style={front === 'a' ? undefined : HIDDEN_STYLE}>
+            <Page
+              key={`${documentId}-a-${slots.a}`}
+              pageNumber={pageNumber}
+              scale={slots.a}
+              renderTextLayer={true}
+              renderAnnotationLayer={true}
+              customTextRenderer={customTextRenderer}
+              onRenderSuccess={({ height }) => handleRendered('a', slots.a!, height)}
+            />
+          </div>
+        )}
+        {slots.b !== null && (
+          <div ref={slotBRef} style={front === 'b' ? undefined : HIDDEN_STYLE}>
+            <Page
+              key={`${documentId}-b-${slots.b}`}
+              pageNumber={pageNumber}
+              scale={slots.b}
+              renderTextLayer={true}
+              renderAnnotationLayer={true}
+              customTextRenderer={customTextRenderer}
+              onRenderSuccess={({ height }) => handleRendered('b', slots.b!, height)}
+            />
+          </div>
+        )}
+      </div>
+      {renderOverlay && (
+        <div className="annotation-overlay-host" style={{ position: 'absolute', inset: 0 }}>
+          {renderOverlay(scale)}
         </div>
       )}
-      {slots.b !== null && (
-        <div ref={slotBRef} style={front === 'b' ? undefined : HIDDEN_STYLE}>
-          <Page
-            key={`${documentId}-b-${slots.b}`}
-            pageNumber={pageNumber}
-            scale={slots.b}
-            renderTextLayer={true}
-            renderAnnotationLayer={true}
-            customTextRenderer={customTextRenderer}
-            onRenderSuccess={({ height }) => handleRendered('b', slots.b!, height)}
-          />
-        </div>
-      )}
-      {renderOverlay && <div className="annotation-overlay-host">{renderOverlay(frontScale)}</div>}
     </div>
   )
 }
@@ -496,13 +502,13 @@ function PDFViewerInner(
   )
 
   const renderPageOverlay = useCallback(
-    (pageNumber: number, frontScale: number): React.ReactNode => {
+    (pageNumber: number, overlayScale: number): React.ReactNode => {
       const list = annotationsByPage.get(pageNumber)
       if (!list || list.length === 0) return null
       return (
         <AnnotationLayer
           annotations={list}
-          scale={frontScale}
+          scale={overlayScale}
           openId={openAnnotationId}
           openIsNew={justCreatedId === openAnnotationId && openAnnotationId !== null}
           onOpenChange={(id) => {
@@ -644,7 +650,7 @@ function PDFViewerInner(
                       scale={scale}
                       onRendered={(height) => wrappedOnPageRenderSuccess(n, height)}
                       customTextRenderer={customTextRenderer}
-                      renderOverlay={(frontScale) => renderPageOverlay(n, frontScale)}
+                      renderOverlay={(overlayScale) => renderPageOverlay(n, overlayScale)}
                     />
                   </div>
                 )

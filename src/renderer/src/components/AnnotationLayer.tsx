@@ -284,6 +284,14 @@ function findVisibleTextLayer(annotationRoot: HTMLElement): HTMLElement | null {
     if (el.style.top === '-99999px') continue
     const tl = el.querySelector('.textLayer')
     if (tl) return tl as HTMLElement
+    // The overlay host lives outside the zoom container, so slots are nested
+    // one level deeper. Walk the zoom container's non-hidden children.
+    for (const nested of Array.from(el.children)) {
+      const nestedEl = nested as HTMLElement
+      if (nestedEl.style.top === '-99999px') continue
+      const nestedTl = nestedEl.querySelector('.textLayer')
+      if (nestedTl) return nestedTl as HTMLElement
+    }
   }
   return null
 }
