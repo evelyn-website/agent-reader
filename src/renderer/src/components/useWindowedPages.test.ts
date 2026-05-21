@@ -1,6 +1,91 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { useWindowedPages } from './useWindowedPages'
+
+describe('useWindowedPages — deferred scroll', () => {
+  const containers: HTMLElement[] = []
+
+  afterEach(() => {
+    containers.forEach((c) => c.remove())
+    containers.length = 0
+  })
+
+  function makeContainer(): { container: HTMLElement; scrollTopWrites: number[] } {
+    const scrollTopWrites: number[] = []
+    const container = document.createElement('div')
+    container.className = 'pdf-document'
+    let _scrollTop = 0
+    Object.defineProperty(container, 'scrollTop', {
+      get: () => _scrollTop,
+      set: (v: number) => {
+        _scrollTop = v
+        scrollTopWrites.push(v)
+      },
+      configurable: true
+    })
+    document.body.appendChild(container)
+    containers.push(container)
+    return { container, scrollTopWrites }
+  }
+
+  it('performs the scroll in onPageRenderSuccess when scrollToPage found no container', async () => {
+    const { result } = renderHook(({ n }) => useWindowedPages(n, 1), {
+      initialProps: { n: 20 }
+    })
+
+    // No page refs registered yet — scrollToPage cannot find the scroll container.
+    act(() => {
+      result.current.scrollToPage(15)
+    })
+    // pinnedTarget should be set, creating a two-window layout.
+    expect(result.current.layout.windowB).not.toBeNull()
+
+    // Simulate windowA pages mounting: attach a .pdf-document container and
+    // register one of its children as a page ref.
+    const { container, scrollTopWrites } = makeContainer()
+    const pageDiv = document.createElement('div')
+    container.appendChild(pageDiv)
+
+    act(() => {
+      result.current.setPageRef(1, pageDiv)
+    })
+
+    // Pinned page renders — deferred scroll should fire now.
+    act(() => {
+      result.current.onPageRenderSuccess(15, 800)
+    })
+
+    expect(result.current.currentPage).toBe(15)
+    expect(result.current.layout.windowB).toBeNull()
+    // scrollTop must have been written (value > 0 for page 15 of 20).
+    expect(scrollTopWrites.length).toBeGreaterThan(0)
+    expect(scrollTopWrites[scrollTopWrites.length - 1]).toBeGreaterThan(0)
+  })
+
+  it('does not defer the scroll when the container is already available', () => {
+    const { result } = renderHook(({ n }) => useWindowedPages(n, 1), {
+      initialProps: { n: 20 }
+    })
+
+    const { container, scrollTopWrites } = makeContainer()
+    const pageDiv = document.createElement('div')
+    container.appendChild(pageDiv)
+
+    act(() => {
+      result.current.setPageRef(1, pageDiv)
+      result.current.scrollToPage(15)
+    })
+
+    // Container was available — scroll should have happened immediately.
+    expect(scrollTopWrites.length).toBeGreaterThan(0)
+    // onPageRenderSuccess should not write scrollTop a second time.
+    const writesAfterScroll = scrollTopWrites.length
+    act(() => {
+      result.current.onPageRenderSuccess(15, 800)
+    })
+    expect(scrollTopWrites.length).toBe(writesAfterScroll)
+  })
+})
 
 describe('useWindowedPages — document reset', () => {
   it('clears cached page state when numPages drops to zero', async () => {

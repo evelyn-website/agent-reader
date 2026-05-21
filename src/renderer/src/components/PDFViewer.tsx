@@ -194,54 +194,6 @@ function SwappablePage({
   )
 }
 
-interface PageWindowProps {
-  documentId: string
-  range: { from: number; to: number }
-  scale: number
-  setPageRef: (n: number, el: HTMLDivElement | null) => void
-  getPlaceholderHeight: (n: number) => number
-  onPageRenderSuccess: (n: number, height: number) => void
-  customTextRenderer: TextRenderer | undefined
-  renderPageOverlay: (n: number, frontScale: number) => React.ReactNode
-  onPageMouseDown: (n: number, e: React.MouseEvent) => void | Promise<void>
-}
-
-function PageWindow({
-  documentId,
-  range,
-  scale,
-  setPageRef,
-  getPlaceholderHeight,
-  onPageRenderSuccess,
-  customTextRenderer,
-  renderPageOverlay,
-  onPageMouseDown
-}: PageWindowProps): React.JSX.Element {
-  const out: React.JSX.Element[] = []
-  for (let n = range.from; n <= range.to; n++) {
-    out.push(
-      <div
-        key={n}
-        ref={(el) => setPageRef(n, el)}
-        className="pdf-page-wrapper"
-        style={{ height: getPlaceholderHeight(n), overflow: 'hidden' }}
-        data-page-number={n}
-        onMouseDown={(e) => void onPageMouseDown(n, e)}
-      >
-        <SwappablePage
-          key={`${documentId}-${n}`}
-          documentId={documentId}
-          pageNumber={n}
-          scale={scale}
-          onRendered={(height) => onPageRenderSuccess(n, height)}
-          customTextRenderer={customTextRenderer}
-          renderOverlay={(frontScale) => renderPageOverlay(n, frontScale)}
-        />
-      </div>
-    )
-  }
-  return <>{out}</>
-}
 
 const HTML_ESCAPE: Record<string, string> = {
   '&': '&amp;',
@@ -668,39 +620,66 @@ function PDFViewerInner(
         <div className="pdf-pages-inner">
           {pdfProxy && (
             <DocumentContext.Provider value={documentContextValue}>
-              {layout.topSpacer > 0 && (
-                <div className="pdf-spacer" style={{ height: layout.topSpacer }} />
-              )}
-              <PageWindow
-                documentId={documentId}
-                range={layout.windowA}
-                scale={scale}
-                setPageRef={setPageRefCombined}
-                getPlaceholderHeight={getPlaceholderHeight}
-                onPageRenderSuccess={wrappedOnPageRenderSuccess}
-                customTextRenderer={customTextRenderer}
-                renderPageOverlay={renderPageOverlay}
-                onPageMouseDown={handlePageMouseDown}
-              />
-              {layout.middleSpacer > 0 && (
-                <div className="pdf-spacer" style={{ height: layout.middleSpacer }} />
-              )}
-              {layout.windowB && (
-                <PageWindow
-                  documentId={documentId}
-                  range={layout.windowB}
-                  scale={scale}
-                  setPageRef={setPageRefCombined}
-                  getPlaceholderHeight={getPlaceholderHeight}
-                  onPageRenderSuccess={onPageRenderSuccess}
-                  customTextRenderer={customTextRenderer}
-                  renderPageOverlay={renderPageOverlay}
-                  onPageMouseDown={handlePageMouseDown}
-                />
-              )}
-              {layout.bottomSpacer > 0 && (
-                <div className="pdf-spacer" style={{ height: layout.bottomSpacer }} />
-              )}
+              {(() => {
+                // Render all page wrappers in a single flat keyed list so that
+                // React can match pages by key (page number) across layout
+                // transitions. Without this, when the two-window layout collapses
+                // to one, pages in the old windowB component get unmounted and
+                // remounted in windowA even though they're the same pages —
+                // causing react-pdf to re-render their canvases and producing a
+                // white flash.
+                const renderPage = (n: number): React.JSX.Element => (
+                  <div
+                    key={n}
+                    ref={(el) => setPageRefCombined(n, el)}
+                    className="pdf-page-wrapper"
+                    style={{ height: getPlaceholderHeight(n), overflow: 'hidden' }}
+                    data-page-number={n}
+                    onMouseDown={(e) => void handlePageMouseDown(n, e)}
+                  >
+                    <SwappablePage
+                      key={`${documentId}-${n}`}
+                      documentId={documentId}
+                      pageNumber={n}
+                      scale={scale}
+                      onRendered={(height) => wrappedOnPageRenderSuccess(n, height)}
+                      customTextRenderer={customTextRenderer}
+                      renderOverlay={(frontScale) => renderPageOverlay(n, frontScale)}
+                    />
+                  </div>
+                )
+                const items: React.JSX.Element[] = []
+                if (layout.topSpacer > 0)
+                  items.push(
+                    <div
+                      key="spacer-top"
+                      className="pdf-spacer"
+                      style={{ height: layout.topSpacer }}
+                    />
+                  )
+                for (let n = layout.windowA.from; n <= layout.windowA.to; n++)
+                  items.push(renderPage(n))
+                if (layout.middleSpacer > 0)
+                  items.push(
+                    <div
+                      key="spacer-middle"
+                      className="pdf-spacer"
+                      style={{ height: layout.middleSpacer }}
+                    />
+                  )
+                if (layout.windowB)
+                  for (let n = layout.windowB.from; n <= layout.windowB.to; n++)
+                    items.push(renderPage(n))
+                if (layout.bottomSpacer > 0)
+                  items.push(
+                    <div
+                      key="spacer-bottom"
+                      className="pdf-spacer"
+                      style={{ height: layout.bottomSpacer }}
+                    />
+                  )
+                return items
+              })()}
             </DocumentContext.Provider>
           )}
         </div>
