@@ -2,7 +2,7 @@ import { spawn as spawnPty, type IPty } from '@lydell/node-pty'
 import { existsSync, statSync } from 'fs'
 import { delimiter, join } from 'path'
 import type { WebContents } from 'electron'
-import { getChatSession, setChatSessionClaudeId } from '../db'
+import { getChatSession, setChatSessionClaudeId, getDocument, getSearchIndex, listAnnotations, getOutline } from '../db'
 import { resolveSessionCwd } from '../chat/cwd'
 import { reserveSessionId, type SessionIdReservation } from '../chat/sessionIdChannel'
 import { adoptClaudeSessionId, startJsonlHydrator, stopJsonlHydrator } from '../chat/jsonlHydrator'
@@ -314,22 +314,48 @@ function buildSystemPrompt(session: {
   origin_document_id: string | null
   origin_page_number: number | null
 }): string {
-  const docNote = session.origin_document_id
-    ? ` This session was opened from document ID ${session.origin_document_id}` +
-      (session.origin_page_number ? `, page ${session.origin_page_number}.` : '.')
-    : ''
-
-  return [
+  const lines: string[] = [
     'You are running inside agent-reader, a PDF reading app.',
     'You have MCP tools for the open document:',
     '  • get_page / get_pages — read page text (call get_page({}) for the current page)',
     '  • search_text — search across all pages',
+    '  • get_outline — table of contents with page numbers',
     '  • save_note / save_highlight — save findings as marks on the page',
     'When the user asks about document content, use these tools first rather than relying on general knowledge.',
-    docNote
   ]
-    .filter(Boolean)
-    .join(' ')
+
+  const docId = session.origin_document_id
+  if (docId) {
+    const doc = getDocument(docId)
+    const pageTexts = getSearchIndex(docId)
+    const annotations = listAnnotations(docId)
+    const outline = getOutline(docId)
+
+    const parts: string[] = []
+    if (doc?.filename) parts.push(`Document: "${doc.filename}"`)
+    if (pageTexts) parts.push(`${pageTexts.length} pages`)
+    if (session.origin_page_number) parts.push(`current page: ${session.origin_page_number}`)
+
+    const highlights = annotations.filter((a) => a.kind === 'highlight').length
+    const notes = annotations.filter((a) => a.kind === 'note').length
+    const markParts = [
+      highlights > 0 ? `${highlights} highlight${highlights !== 1 ? 's' : ''}` : null,
+      notes > 0 ? `${notes} note${notes !== 1 ? 's' : ''}` : null,
+    ].filter(Boolean)
+    parts.push(markParts.length > 0 ? markParts.join(', ') : 'no marks yet')
+
+    lines.push(parts.join(' | '))
+
+    if (outline && outline.length > 0) {
+      const top = outline.slice(0, 8)
+      const summary = top
+        .map((n) => (n.pageNumber ? `${n.title} (p.${n.pageNumber})` : n.title))
+        .join(' · ')
+      lines.push(`Outline: ${summary}${outline.length > 8 ? ` … +${outline.length - 8} more` : ''}`)
+    }
+  }
+
+  return lines.join('\n')
 }
 
 function shellEscape(arg: string): string {

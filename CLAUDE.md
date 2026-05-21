@@ -44,7 +44,7 @@ When the user says "start a session", "end the session", or "end the session wit
 
 - Electron shell, React + TypeScript renderer
 - `react-pdf` (PDF.js) for rendering; `pdfjs-dist` for text extraction
-- `claude -p` subprocess for the AI agent (inherits `~/.claude` MCP servers)
+- `claude` CLI subprocess (interactive PTY) for the AI agent (inherits `~/.claude` MCP servers)
 - Local MCP server exposes PDF tools: `get_page`, `get_pages`, `search_text`, `get_toc`
 - SQLite via `better-sqlite3` for marks, sessions, and project metadata
 

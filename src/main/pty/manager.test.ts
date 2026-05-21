@@ -3,7 +3,10 @@ import { EventEmitter } from 'events'
 
 vi.mock('../db', () => ({
   getChatSession: vi.fn(),
-  getDocument: vi.fn(),
+  getDocument: vi.fn(() => null),
+  getSearchIndex: vi.fn(() => null),
+  listAnnotations: vi.fn(() => []),
+  getOutline: vi.fn(() => null),
   setChatSessionClaudeId: vi.fn(() => null),
   getDbPath: vi.fn(() => '/tmp/agent-reader-test.db')
 }))
@@ -47,6 +50,7 @@ vi.mock('../mcp/activeLocation', () => ({
 
 import { ChatPtyManager } from './manager'
 import * as db from '../db'
+import type { AnnotationRow } from '../../shared/dbTypes'
 
 interface FakePty {
   pid: number
@@ -311,8 +315,8 @@ describe('ChatPtyManager', () => {
       id: 's1',
       scope_key: '/project',
       title: 't',
-      origin_document_id: 'doc-abc',
-      origin_page_number: 42,
+      origin_document_id: null,
+      origin_page_number: null,
       origin_text_excerpt: null,
       claude_session_id: null,
       created_at: 0,
@@ -332,8 +336,6 @@ describe('ChatPtyManager', () => {
     expect(prompt).toContain('search_text')
     expect(prompt).toContain('save_note')
     expect(prompt).toContain('save_highlight')
-    expect(prompt).toContain('doc-abc')
-    expect(prompt).toContain('page 42')
 
     // Resumed sessions should not have --append-system-prompt
     vi.mocked(db.getChatSession).mockReturnValueOnce({
@@ -354,6 +356,73 @@ describe('ChatPtyManager', () => {
     const args2 = spawnHarness.calls[1].args
     const promptIdx2 = args2.indexOf('--append-system-prompt')
     expect(promptIdx2).toBe(-1)
+  })
+
+  it('injects document orientation context into --append-system-prompt', () => {
+    vi.mocked(db.getChatSession).mockReturnValueOnce({
+      id: 's1',
+      scope_key: '/project',
+      title: 't',
+      origin_document_id: 'doc-abc',
+      origin_page_number: 42,
+      origin_text_excerpt: null,
+      claude_session_id: null,
+      created_at: 0,
+      updated_at: 0,
+      last_message_at: null
+    } as never)
+    vi.mocked(db.getDocument).mockReturnValueOnce({ id: 'doc-abc', filename: 'my-paper.pdf' } as never)
+    vi.mocked(db.getSearchIndex).mockReturnValueOnce(new Array(120).fill('') as never)
+    vi.mocked(db.listAnnotations).mockReturnValueOnce([
+      { kind: 'highlight' } as AnnotationRow,
+      { kind: 'highlight' } as AnnotationRow,
+      { kind: 'note' } as AnnotationRow,
+    ])
+    vi.mocked(db.getOutline).mockReturnValueOnce([
+      { title: 'Introduction', pageNumber: 1, children: [] },
+      { title: 'Methods', pageNumber: 15, children: [] },
+    ])
+
+    const wc = makeWebContents()
+    manager.attach('s1', wc as never, 80, 24)
+
+    const args = spawnHarness.calls[0].args
+    const promptIdx = args.indexOf('--append-system-prompt')
+    expect(promptIdx).toBeGreaterThanOrEqual(0)
+    const prompt = args[promptIdx + 1]
+
+    expect(prompt).toContain('"my-paper.pdf"')
+    expect(prompt).toContain('120 pages')
+    expect(prompt).toContain('current page: 42')
+    expect(prompt).toContain('2 highlights')
+    expect(prompt).toContain('1 note')
+    expect(prompt).toContain('Introduction (p.1)')
+    expect(prompt).toContain('Methods (p.15)')
+  })
+
+  it('shows "no marks yet" when document has no annotations', () => {
+    vi.mocked(db.getChatSession).mockReturnValueOnce({
+      id: 's1',
+      scope_key: '/project',
+      title: 't',
+      origin_document_id: 'doc-xyz',
+      origin_page_number: null,
+      origin_text_excerpt: null,
+      claude_session_id: null,
+      created_at: 0,
+      updated_at: 0,
+      last_message_at: null
+    } as never)
+    vi.mocked(db.getDocument).mockReturnValueOnce({ id: 'doc-xyz', filename: 'book.pdf' } as never)
+    vi.mocked(db.getSearchIndex).mockReturnValueOnce(new Array(50).fill('') as never)
+
+    const wc = makeWebContents()
+    manager.attach('s1', wc as never, 80, 24)
+
+    const args = spawnHarness.calls[0].args
+    const prompt = args[args.indexOf('--append-system-prompt') + 1]
+    expect(prompt).toContain('no marks yet')
+    expect(prompt).not.toContain('Outline:')
   })
 
   it('cleans up the entry when the pty exits on its own', () => {
