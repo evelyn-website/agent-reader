@@ -9,7 +9,7 @@ Architecture and cross-cutting concepts: `~/kb/` (use the `kb` CLI)
 
 This project uses [Chainlink](https://github.com/dollspace-gay/chainlink) for issue tracking and session handoffs. The DB lives in `.chainlink/` (gitignored).
 
-**Starting a session** — run these at the top of each Claude Code session:
+**Starting a work session** — run these when you're sitting down to work on something:
 ```bash
 chainlink session start
 chainlink next          # see what's ready to work on
