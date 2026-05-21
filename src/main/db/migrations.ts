@@ -113,6 +113,15 @@ const migrations: Migration[] = [
         created_at  INTEGER NOT NULL
       );
     `)
+  },
+  (db) => {
+    db.exec(`
+      CREATE TABLE document_outlines (
+        document_id  TEXT PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+        outline_json TEXT NOT NULL,
+        built_at     INTEGER NOT NULL
+      );
+    `)
   }
 ]
 

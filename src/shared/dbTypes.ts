@@ -133,3 +133,9 @@ export interface ProjectDashboard {
   recentMarks: ProjectMarkSummary[]
   recentSessions: ChatSessionSummary[]
 }
+
+export interface OutlineNode {
+  title: string
+  pageNumber: number | null
+  children: OutlineNode[]
+}

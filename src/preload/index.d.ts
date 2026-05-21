@@ -7,6 +7,7 @@ import type {
   CreateChatSessionInput,
   CreateAnnotationInput,
   DocumentRow,
+  OutlineNode,
   ProjectDashboard,
   ProjectRow,
   UpdateAnnotationInput
@@ -76,6 +77,10 @@ declare global {
       searchIndex: {
         get: (documentId: string) => Promise<string[] | null>
         put: (documentId: string, pageTexts: string[]) => Promise<null>
+      }
+      outline: {
+        get: (documentId: string) => Promise<OutlineNode[] | null>
+        put: (documentId: string, outline: OutlineNode[]) => Promise<null>
       }
       db: {
         getPageText: (documentId: string, page: number) => Promise<string | null>

@@ -27,6 +27,8 @@ import {
   getSearchIndex,
   putSearchIndex,
   getPageText,
+  getOutline,
+  putOutline,
   type CreateChatSessionInput,
   type CreateAnnotationInput,
   type ProjectDashboard,
@@ -200,6 +202,15 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('db:getPageText', (_event, documentId: string, page: number) => {
     return getPageText(documentId, page)
+  })
+
+  ipcMain.handle('outline:get', (_event, documentId: string) => {
+    return getOutline(documentId)
+  })
+
+  ipcMain.handle('outline:put', (_event, documentId: string, outline: unknown) => {
+    putOutline(documentId, outline as import('../shared/dbTypes').OutlineNode[])
+    return null
   })
 
   ipcMain.handle('project:listRecent', (): ProjectRow[] => {

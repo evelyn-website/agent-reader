@@ -583,6 +583,7 @@ function PDFViewerInner(
         if (cancelled) return
         setOutline(outline)
         setMeta(documentId, { dims, outline })
+        void window.api.outline.put(documentId, outline)
         dPerf(`  ${id} loadToc ${(tOutline - tDims).toFixed(1)}ms; meta cached`)
       }
       const tAfterMeta = performance.now()

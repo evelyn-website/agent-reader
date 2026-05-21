@@ -133,6 +133,21 @@ export const TOOLS = [
     }
   },
   {
+    name: 'get_outline',
+    description:
+      'Return the table of contents / outline of a document as a nested tree of { title, page_number, children } entries. page_number is 1-based and may be null for entries whose destination could not be resolved. Returns an empty array if no outline is available.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        document_id: {
+          type: 'string',
+          description: 'Optional document id; defaults to the currently-focused document.'
+        }
+      },
+      required: []
+    }
+  },
+  {
     name: 'save_highlight',
     description:
       'Save a highlight as a Mark on the underlying PDF. Provide the highlighted text and choose an anchor ("origin", "current", or an explicit { document_id, page }). Optional color and note are stored on the highlight.',
@@ -184,6 +199,10 @@ const DEFAULT_NOTE_ANCHOR_Y = 20
 
 interface SearchIndexRow {
   pages_json: string
+}
+
+interface OutlineRow {
+  outline_json: string
 }
 
 interface AnnotationRow {
@@ -245,6 +264,21 @@ export function createServer(opts: CreateServerOptions): Server {
     const loc = readActiveLocation()
     if (loc && loc.documentId) return loc.documentId
     throw new Error('No document_id provided and no document is currently open.')
+  }
+
+  function getDocumentOutline(documentId: string): unknown[] {
+    const row = db
+      .prepare<[string], OutlineRow>(
+        'SELECT outline_json FROM document_outlines WHERE document_id = ?'
+      )
+      .get(documentId)
+    if (!row) return []
+    try {
+      const parsed = JSON.parse(row.outline_json) as unknown
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
   }
 
   function getSearchIndex(documentId: string): string[] | null {
@@ -346,6 +380,11 @@ export function createServer(opts: CreateServerOptions): Server {
           return { page: n, text: pages[n] || '', marks: getPageMarks(docId, n) }
         })
         return textResult(JSON.stringify(out))
+      }
+      case 'get_outline': {
+        const docId = resolveDocumentId(args.document_id)
+        const outline = getDocumentOutline(docId)
+        return textResult(JSON.stringify(outline))
       }
       case 'search_text': {
         const docId = resolveDocumentId(args.document_id)

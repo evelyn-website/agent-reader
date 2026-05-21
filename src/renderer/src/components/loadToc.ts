@@ -1,8 +1,4 @@
-export interface OutlineNode {
-  title: string
-  pageNumber: number | null
-  children: OutlineNode[]
-}
+export type { OutlineNode } from '../../../shared/dbTypes'
 
 interface RawOutlineItem {
   title: string

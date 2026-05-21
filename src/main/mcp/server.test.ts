@@ -64,13 +64,13 @@ describe('mcp-server', () => {
   })
 
   describe('tools/list', () => {
-    it('returns the five tools', () => {
+    it('returns the six tools', () => {
       const s = build()
       const resp = s.handleMessage({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) as {
         result: { tools: Array<{ name: string }> }
       }
       const names = resp.result.tools.map((t) => t.name).sort()
-      expect(names).toEqual(['get_page', 'get_pages', 'save_highlight', 'save_note', 'search_text'])
+      expect(names).toEqual(['get_outline', 'get_page', 'get_pages', 'save_highlight', 'save_note', 'search_text'])
     })
   })
 
@@ -317,6 +317,48 @@ describe('mcp-server', () => {
         .get() as { anchor_x: number | null; anchor_y: number | null }
       expect(row.anchor_x).not.toBeNull()
       expect(row.anchor_y).not.toBeNull()
+    })
+  })
+
+  describe('get_outline', () => {
+    const sampleOutline = [
+      { title: 'Introduction', pageNumber: 1, children: [] },
+      {
+        title: 'Chapter 1',
+        pageNumber: 3,
+        children: [{ title: 'Section 1.1', pageNumber: 4, children: [] }]
+      }
+    ]
+
+    it('returns empty array when no outline is stored', () => {
+      const s = build()
+      const r = s.handleToolCall('get_outline', { document_id: 'doc-A' })
+      expect(JSON.parse(r.content[0].text)).toEqual([])
+    })
+
+    it('returns the stored outline for the document', () => {
+      db.prepare(
+        `INSERT INTO document_outlines (document_id, outline_json, built_at) VALUES (?, ?, ?)`
+      ).run('doc-A', JSON.stringify(sampleOutline), Date.now())
+      const s = build()
+      const r = s.handleToolCall('get_outline', { document_id: 'doc-A' })
+      expect(JSON.parse(r.content[0].text)).toEqual(sampleOutline)
+    })
+
+    it('falls back to current location when document_id is omitted', () => {
+      db.prepare(
+        `INSERT INTO document_outlines (document_id, outline_json, built_at) VALUES (?, ?, ?)`
+      ).run('doc-A', JSON.stringify(sampleOutline), Date.now())
+      writeFileSync(locPath, JSON.stringify({ documentId: 'doc-A', page: 1, docPath: '/tmp/a.pdf' }))
+      const s = build({ activeLocationPath: locPath })
+      const r = s.handleToolCall('get_outline', {})
+      expect(JSON.parse(r.content[0].text)).toEqual(sampleOutline)
+    })
+
+    it('returns error when no document_id and no active location', () => {
+      const s = build()
+      const r = s.handleToolCall('get_outline', {})
+      expect(r.isError).toBe(true)
     })
   })
 })

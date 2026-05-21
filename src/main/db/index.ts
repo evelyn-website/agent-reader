@@ -13,6 +13,7 @@ import type {
   CreateChatMessageInput,
   CreateChatSessionInput,
   DocumentRow,
+  OutlineNode,
   ProjectDashboard,
   ProjectMarkSummary,
   ProjectRow,
@@ -579,4 +580,30 @@ export function putSearchIndex(documentId: string, pageTexts: string[]): void {
          built_at   = excluded.built_at`
     )
     .run(documentId, JSON.stringify(pageTexts), SEARCH_INDEX_SCHEMA_V, Date.now())
+}
+
+export function getOutline(documentId: string): OutlineNode[] | null {
+  const row = getDb()
+    .prepare<[string], { outline_json: string }>(
+      `SELECT outline_json FROM document_outlines WHERE document_id = ?`
+    )
+    .get(documentId)
+  if (!row) return null
+  try {
+    return JSON.parse(row.outline_json) as OutlineNode[]
+  } catch {
+    return null
+  }
+}
+
+export function putOutline(documentId: string, outline: OutlineNode[]): void {
+  getDb()
+    .prepare(
+      `INSERT INTO document_outlines (document_id, outline_json, built_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(document_id) DO UPDATE SET
+         outline_json = excluded.outline_json,
+         built_at     = excluded.built_at`
+    )
+    .run(documentId, JSON.stringify(outline), Date.now())
 }

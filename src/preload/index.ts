@@ -8,6 +8,7 @@ import type {
   CreateChatSessionInput,
   CreateAnnotationInput,
   DocumentRow,
+  OutlineNode,
   ProjectDashboard,
   ProjectRow,
   UpdateAnnotationInput
@@ -113,6 +114,12 @@ const api = {
       ipcRenderer.invoke('searchIndex:get', documentId),
     put: (documentId: string, pageTexts: string[]): Promise<null> =>
       ipcRenderer.invoke('searchIndex:put', documentId, pageTexts)
+  },
+  outline: {
+    get: (documentId: string): Promise<OutlineNode[] | null> =>
+      ipcRenderer.invoke('outline:get', documentId),
+    put: (documentId: string, outline: OutlineNode[]): Promise<null> =>
+      ipcRenderer.invoke('outline:put', documentId, outline)
   },
   db: {
     getPageText: (documentId: string, page: number): Promise<string | null> =>
