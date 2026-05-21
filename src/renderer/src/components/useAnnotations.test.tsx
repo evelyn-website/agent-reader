@@ -189,6 +189,28 @@ describe('useAnnotations — updateAnnotation', () => {
   })
 })
 
+describe('useAnnotations — updateAnnotation anchor', () => {
+  it('passes anchor_x and anchor_y to the API and updates state', async () => {
+    const initial = makeRow({ id: 'ann-1', kind: 'note', anchor_x: 100, anchor_y: 200 })
+    window.api.annotations.list = vi.fn().mockResolvedValue([initial])
+    const updated = makeRow({ id: 'ann-1', kind: 'note', anchor_x: 300, anchor_y: 400 })
+    window.api.annotations.update = vi.fn().mockResolvedValue(updated)
+
+    const { result } = renderHook(() => useAnnotations('doc-1'))
+    await waitFor(() => expect(result.current.all).toHaveLength(1))
+
+    await act(async () => {
+      await result.current.updateAnnotation('ann-1', { anchor_x: 300, anchor_y: 400 })
+    })
+
+    expect(window.api.annotations.update).toHaveBeenCalledWith(
+      'ann-1',
+      expect.objectContaining({ anchor_x: 300, anchor_y: 400 })
+    )
+    expect(result.current.all[0].anchor).toEqual({ x: 300, y: 400 })
+  })
+})
+
 describe('useAnnotations — deleteAnnotation', () => {
   it('removes the annotation from state', async () => {
     const row = makeRow({ id: 'ann-1' })

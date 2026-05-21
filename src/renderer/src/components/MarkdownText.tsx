@@ -26,19 +26,13 @@ function tokenizeLine(line: string): React.ReactNode[] {
     // Determine which token type matched and emit the corresponding element
     if (match[1]) {
       // **bold**
-      nodes.push(
-        <strong key={`${matchIndex}-strong`}>{match[2]}</strong>
-      )
+      nodes.push(<strong key={`${matchIndex}-strong`}>{match[2]}</strong>)
     } else if (match[3]) {
       // __underline__
-      nodes.push(
-        <u key={`${matchIndex}-u`}>{match[4]}</u>
-      )
+      nodes.push(<u key={`${matchIndex}-u`}>{match[4]}</u>)
     } else if (match[5]) {
       // *italic*
-      nodes.push(
-        <em key={`${matchIndex}-em`}>{match[6]}</em>
-      )
+      nodes.push(<em key={`${matchIndex}-em`}>{match[6]}</em>)
     } else if (match[7]) {
       // [label](url)
       const label = match[8]

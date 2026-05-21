@@ -310,7 +310,10 @@ function buildSettingsJson(): string {
   })
 }
 
-function buildSystemPrompt(session: { origin_document_id: string | null; origin_page_number: number | null }): string {
+function buildSystemPrompt(session: {
+  origin_document_id: string | null
+  origin_page_number: number | null
+}): string {
   const docNote = session.origin_document_id
     ? ` This session was opened from document ID ${session.origin_document_id}` +
       (session.origin_page_number ? `, page ${session.origin_page_number}.` : '.')
@@ -324,7 +327,9 @@ function buildSystemPrompt(session: { origin_document_id: string | null; origin_
     '  • save_note / save_highlight — save findings as marks on the page',
     'When the user asks about document content, use these tools first rather than relying on general knowledge.',
     docNote
-  ].filter(Boolean).join(' ')
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 
 function shellEscape(arg: string): string {

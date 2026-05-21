@@ -74,7 +74,7 @@ export interface UseAnnotationsResult {
   createNote: (input: CreateNoteInput) => Promise<Annotation | null>
   updateAnnotation: (
     id: string,
-    patch: { color?: HighlightColor; comment?: string | null }
+    patch: { color?: HighlightColor; comment?: string | null; anchor_x?: number; anchor_y?: number }
   ) => Promise<void>
   deleteAnnotation: (id: string) => Promise<void>
 }
@@ -155,11 +155,18 @@ export function useAnnotations(documentId: string | null): UseAnnotationsResult 
   const updateAnnotation = useCallback(
     async (
       id: string,
-      patch: { color?: HighlightColor; comment?: string | null }
+      patch: {
+        color?: HighlightColor
+        comment?: string | null
+        anchor_x?: number
+        anchor_y?: number
+      }
     ): Promise<void> => {
       const row = await window.api.annotations.update(id, {
         color: patch.color,
-        comment: patch.comment
+        comment: patch.comment,
+        anchor_x: patch.anchor_x,
+        anchor_y: patch.anchor_y
       })
       if (!row) return
       const ann = rowToAnnotation(row)

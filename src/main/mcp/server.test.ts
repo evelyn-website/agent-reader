@@ -22,7 +22,7 @@ function freshDb(): Database.Database {
   ).run('doc-B', 'b.pdf', '/tmp/b.pdf', 2000, 0, 0, 1)
   db.prepare(
     `INSERT INTO search_indexes (document_id, pages_json, schema_v, built_at) VALUES (?, ?, ?, ?)`
-  // pages_json is 1-indexed in production (buildSearchIndex produces [''] + page texts).
+    // pages_json is 1-indexed in production (buildSearchIndex produces [''] + page texts).
   ).run('doc-A', JSON.stringify(['', 'Hello world', 'Second page about AGENTS']), 1, 0)
   return db
 }

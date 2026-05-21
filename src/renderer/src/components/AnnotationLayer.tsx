@@ -15,6 +15,7 @@ interface AnnotationLayerProps {
     id: string,
     patch: { color?: HighlightColor; comment?: string | null }
   ) => Promise<void>
+  onMove: (id: string, x: number, y: number) => Promise<void>
   onDelete: (id: string) => Promise<void>
 }
 
@@ -25,10 +26,21 @@ export default function AnnotationLayer({
   openIsNew,
   onOpenChange,
   onUpdate,
+  onMove,
   onDelete
 }: AnnotationLayerProps): React.JSX.Element | null {
   const rootRef = useRef<HTMLDivElement>(null)
   const derivedRects = useRectlessHighlightRects(rootRef, annotations, scale)
+  const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null)
+  const dragRef = useRef(drag)
+  const scaleRef = useRef(scale)
+  const onMoveRef = useRef(onMove)
+
+  useEffect(() => {
+    dragRef.current = drag
+    scaleRef.current = scale
+    onMoveRef.current = onMove
+  })
 
   if (annotations.length === 0) return null
 
@@ -88,17 +100,47 @@ export default function AnnotationLayer({
           )
         }
         if (a.kind === 'note' && a.anchor) {
+          const isDragging = drag?.id === a.id
+          const pinX = isDragging ? drag.x * scale : a.anchor.x * scale
+          const pinY = isDragging ? drag.y * scale : a.anchor.y * scale
           return (
             <button
               key={a.id}
-              className={`annotation-pin${a.comment ? ' annotation-pin--has-comment' : ''}`}
-              style={{
-                left: a.anchor.x * scale,
-                top: a.anchor.y * scale
-              }}
+              className={`annotation-pin${a.comment ? ' annotation-pin--has-comment' : ''}${isDragging ? ' annotation-pin--dragging' : ''}`}
+              style={{ left: pinX, top: pinY }}
               onClick={(e) => {
                 e.stopPropagation()
                 onOpenChange(a.id)
+              }}
+              onContextMenu={(e) => e.preventDefault()}
+              onMouseDown={(e) => {
+                if (e.button !== 2) return
+                e.preventDefault()
+                e.stopPropagation()
+                const root = rootRef.current
+                if (!root) return
+                const startDrag = { id: a.id, x: a.anchor!.x, y: a.anchor!.y }
+                setDrag(startDrag)
+
+                const onMouseMove = (me: MouseEvent): void => {
+                  const rect = rootRef.current!.getBoundingClientRect()
+                  const x = (me.clientX - rect.left) / scaleRef.current
+                  const y = (me.clientY - rect.top) / scaleRef.current
+                  setDrag({ id: a.id, x, y })
+                }
+                const onMouseUp = (me: MouseEvent): void => {
+                  me.preventDefault()
+                  window.removeEventListener('mousemove', onMouseMove)
+                  window.removeEventListener('mouseup', onMouseUp)
+                  const current = dragRef.current
+                  if (current && current.id === a.id) {
+                    onMoveRef.current(a.id, current.x, current.y).then(() => setDrag(null))
+                  } else {
+                    setDrag(null)
+                  }
+                }
+                window.addEventListener('mousemove', onMouseMove)
+                window.addEventListener('mouseup', onMouseUp)
               }}
               aria-label={a.comment ?? 'Note'}
             />

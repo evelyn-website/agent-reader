@@ -536,6 +536,13 @@ function PDFViewerInner(
     return () => window.removeEventListener('keydown', onKey)
   }, [triggerHighlight, setNoteMode])
 
+  const moveAnnotation = useCallback(
+    async (id: string, x: number, y: number): Promise<void> => {
+      await updateAnnotation(id, { anchor_x: x, anchor_y: y })
+    },
+    [updateAnnotation]
+  )
+
   const renderPageOverlay = useCallback(
     (pageNumber: number, frontScale: number): React.ReactNode => {
       const list = annotationsByPage.get(pageNumber)
@@ -551,11 +558,19 @@ function PDFViewerInner(
             setOpenAnnotationId(id)
           }}
           onUpdate={updateAnnotation}
+          onMove={moveAnnotation}
           onDelete={deleteAnnotation}
         />
       )
     },
-    [annotationsByPage, openAnnotationId, justCreatedId, updateAnnotation, deleteAnnotation]
+    [
+      annotationsByPage,
+      openAnnotationId,
+      justCreatedId,
+      updateAnnotation,
+      moveAnnotation,
+      deleteAnnotation
+    ]
   )
 
   useEffect(() => {

@@ -117,9 +117,7 @@ describe('stripMarkdown', () => {
   })
 
   it('strips markdown and collapses mixed multi-line', () => {
-    expect(stripMarkdown('**bold**\n*italic*\n[link](http://x.com)')).toBe(
-      'bold italic link'
-    )
+    expect(stripMarkdown('**bold**\n*italic*\n[link](http://x.com)')).toBe('bold italic link')
   })
 
   it('trims leading/trailing whitespace', () => {
