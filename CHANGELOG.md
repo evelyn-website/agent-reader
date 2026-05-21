@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- Add get_marks MCP tool to query marks across documents (#5)
 - Add list_documents MCP tool (#4)
 - Improve mark rendering when zooming (#1)
 - Inject document orientation context at session start (#6)

@@ -159,6 +159,33 @@ export const TOOLS = [
     }
   },
   {
+    name: 'get_marks',
+    description:
+      'Return all marks (highlights and notes) for a document, optionally filtered by kind and page range. Each entry has { id, kind, page, text_excerpt, comment, color }. Use this to survey research artifacts without reading every page.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        document_id: {
+          type: 'string',
+          description: 'Optional document id; defaults to the currently-focused document.'
+        },
+        kind: {
+          type: 'string',
+          enum: ['highlight', 'note', 'all'],
+          description: 'Filter by mark kind. Defaults to "all".'
+        },
+        page_range: {
+          type: 'object',
+          properties: {
+            from: { type: 'integer', description: '1-based start page (inclusive).' },
+            to: { type: 'integer', description: '1-based end page (inclusive).' }
+          }
+        }
+      },
+      required: []
+    }
+  },
+  {
     name: 'save_highlight',
     description:
       'Save a highlight as a Mark on the underlying PDF. Provide the highlighted text and choose an anchor ("origin", "current", or an explicit { document_id, page }). Optional color and note are stored on the highlight.',
@@ -226,6 +253,10 @@ interface MarkRow {
   color: string | null
   text_excerpt: string | null
   comment: string | null
+}
+
+interface MarksQueryRow extends MarkRow {
+  page_number: number
 }
 
 interface DocumentRow {
@@ -313,6 +344,43 @@ export function createServer(opts: CreateServerOptions): Server {
     } catch {
       return null
     }
+  }
+
+  function getMarks(
+    documentId: string,
+    kind: string,
+    pageRange: { from?: number; to?: number } | null
+  ): Array<{ id: string; kind: string; page: number; text_excerpt: string | null; comment: string | null; color: string | null }> {
+    const conditions: string[] = ['document_id = ?']
+    const params: unknown[] = [documentId]
+    if (kind !== 'all') {
+      conditions.push('kind = ?')
+      params.push(kind)
+    }
+    if (pageRange?.from != null) {
+      conditions.push('page_number >= ?')
+      params.push(pageRange.from)
+    }
+    if (pageRange?.to != null) {
+      conditions.push('page_number <= ?')
+      params.push(pageRange.to)
+    }
+    const rows = db
+      .prepare<unknown[], MarksQueryRow>(
+        `SELECT id, kind, page_number, color, text_excerpt, comment
+         FROM annotations
+         WHERE ${conditions.join(' AND ')}
+         ORDER BY page_number, created_at`
+      )
+      .all(...params)
+    return rows.map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      page: r.page_number,
+      text_excerpt: r.text_excerpt,
+      comment: r.comment,
+      color: r.color
+    }))
   }
 
   function getPageMarks(documentId: string, page: number): MarkRow[] {
@@ -423,6 +491,24 @@ export function createServer(opts: CreateServerOptions): Server {
           }
         }
         return textResult(JSON.stringify(matches))
+      }
+      case 'get_marks': {
+        const docId = resolveDocumentId(args.document_id)
+        const kind = typeof args.kind === 'string' ? args.kind : 'all'
+        if (!['highlight', 'note', 'all'].includes(kind)) {
+          return textResult('Error: kind must be "highlight", "note", or "all".')
+        }
+        const pr = args.page_range && typeof args.page_range === 'object'
+          ? (args.page_range as { from?: unknown; to?: unknown })
+          : null
+        const pageRange = pr
+          ? {
+              from: typeof pr.from === 'number' ? pr.from : undefined,
+              to: typeof pr.to === 'number' ? pr.to : undefined
+            }
+          : null
+        const marks = getMarks(docId, kind, pageRange)
+        return textResult(JSON.stringify(marks))
       }
       case 'list_documents': {
         const rows = projectPath

@@ -71,7 +71,7 @@ describe('mcp-server', () => {
         result: { tools: Array<{ name: string }> }
       }
       const names = resp.result.tools.map((t) => t.name).sort()
-      expect(names).toEqual(['get_outline', 'get_page', 'get_pages', 'list_documents', 'save_highlight', 'save_note', 'search_text'])
+      expect(names).toEqual(['get_marks', 'get_outline', 'get_page', 'get_pages', 'list_documents', 'save_highlight', 'save_note', 'search_text'])
     })
   })
 
@@ -360,6 +360,94 @@ describe('mcp-server', () => {
       const s = build()
       const r = s.handleToolCall('get_outline', {})
       expect(r.isError).toBe(true)
+    })
+  })
+
+  describe('get_marks', () => {
+    beforeEach(() => {
+      db.prepare(
+        `INSERT INTO annotations (id, document_id, page_number, kind, color, rects_json, anchor_x, anchor_y, text_excerpt, comment, created_at, updated_at)
+         VALUES ('m1', 'doc-A', 1, 'highlight', 'yellow', NULL, NULL, NULL, 'Hello world', 'a note', 1, 1),
+                ('m2', 'doc-A', 2, 'note', NULL, NULL, 10, 10, NULL, 'a thought', 2, 2),
+                ('m3', 'doc-A', 3, 'highlight', 'blue', NULL, NULL, NULL, 'Third page text', NULL, 3, 3),
+                ('m4', 'doc-B', 1, 'note', NULL, NULL, 5, 5, NULL, 'other doc', 4, 4)`
+      ).run()
+    })
+
+    it('returns all marks for a document', () => {
+      const s = build()
+      const r = s.handleToolCall('get_marks', { document_id: 'doc-A' })
+      const marks = JSON.parse(r.content[0].text)
+      expect(marks).toHaveLength(3)
+      expect(marks.map((m: { id: string }) => m.id).sort()).toEqual(['m1', 'm2', 'm3'])
+    })
+
+    it('returns { id, kind, page, text_excerpt, comment, color } shape', () => {
+      const s = build()
+      const r = s.handleToolCall('get_marks', { document_id: 'doc-A', kind: 'highlight' })
+      const marks = JSON.parse(r.content[0].text)
+      const m1 = marks.find((m: { id: string }) => m.id === 'm1')!
+      expect(m1).toEqual({ id: 'm1', kind: 'highlight', page: 1, text_excerpt: 'Hello world', comment: 'a note', color: 'yellow' })
+    })
+
+    it('filters by kind=highlight', () => {
+      const s = build()
+      const r = s.handleToolCall('get_marks', { document_id: 'doc-A', kind: 'highlight' })
+      const marks = JSON.parse(r.content[0].text)
+      expect(marks).toHaveLength(2)
+      expect(marks.every((m: { kind: string }) => m.kind === 'highlight')).toBe(true)
+    })
+
+    it('filters by kind=note', () => {
+      const s = build()
+      const r = s.handleToolCall('get_marks', { document_id: 'doc-A', kind: 'note' })
+      const marks = JSON.parse(r.content[0].text)
+      expect(marks).toHaveLength(1)
+      expect(marks[0].id).toBe('m2')
+    })
+
+    it('filters by page_range', () => {
+      const s = build()
+      const r = s.handleToolCall('get_marks', { document_id: 'doc-A', page_range: { from: 2, to: 3 } })
+      const marks = JSON.parse(r.content[0].text)
+      expect(marks.map((m: { id: string }) => m.id).sort()).toEqual(['m2', 'm3'])
+    })
+
+    it('page_range.from alone filters lower bound', () => {
+      const s = build()
+      const r = s.handleToolCall('get_marks', { document_id: 'doc-A', page_range: { from: 3 } })
+      const marks = JSON.parse(r.content[0].text)
+      expect(marks).toHaveLength(1)
+      expect(marks[0].id).toBe('m3')
+    })
+
+    it('does not return marks from other documents', () => {
+      const s = build()
+      const r = s.handleToolCall('get_marks', { document_id: 'doc-A' })
+      const marks = JSON.parse(r.content[0].text)
+      expect(marks.every((m: { id: string }) => m.id !== 'm4')).toBe(true)
+    })
+
+    it('falls back to active location when document_id is omitted', () => {
+      writeFileSync(locPath, JSON.stringify({ documentId: 'doc-A', page: 1 }), 'utf8')
+      const s = build({ activeLocationPath: locPath })
+      const r = s.handleToolCall('get_marks', {})
+      const marks = JSON.parse(r.content[0].text)
+      expect(marks.map((m: { id: string }) => m.id).sort()).toEqual(['m1', 'm2', 'm3'])
+    })
+
+    it('errors when no document_id and no active location', () => {
+      const s = build()
+      const r = s.handleToolCall('get_marks', {})
+      expect(r.isError).toBe(true)
+      expect(r.content[0].text).toMatch(/No document_id/)
+    })
+
+    it('returns empty array when no marks exist', () => {
+      const s = build()
+      const r = s.handleToolCall('get_marks', { document_id: 'doc-B', kind: 'highlight' })
+      const marks = JSON.parse(r.content[0].text)
+      expect(marks).toEqual([])
     })
   })
 
