@@ -46,6 +46,9 @@ export function useWindowedPages(
   const scrollContainerRef = useRef<HTMLElement | null>(null)
   const rafPending = useRef(false)
   const liveAnchorRef = useRef<Anchor | null>(null)
+  // Set when scrollToPage couldn't find the container and deferred the scroll.
+  // onPageRenderSuccess performs the scroll when the pinned page lands.
+  const pendingScrollTargetRef = useRef<number | null>(null)
   const prevScaleRef = useRef(scale)
   const prevDimsRef = useRef(pageDimensions)
   const currentPageRef = useRef(currentPage)
@@ -295,14 +298,22 @@ export function useWindowedPages(
     (n: number, height: number) => {
       pageHeights.current.set(n, height)
       if (pinnedTarget !== null && n === pinnedTarget) {
-        // We already scrolled to the right scrollTop in scrollToPage; just
-        // collapse the two-window layout back to one.
+        // If scrollToPage couldn't find the container (no pages were mounted yet),
+        // it deferred the scroll. Perform it now that a page ref exists.
+        if (pendingScrollTargetRef.current === n) {
+          pendingScrollTargetRef.current = null
+          const c = findContainer()
+          if (c) {
+            dPin(`deferred scroll to ${n}`)
+            c.scrollTop = INNER_PAD_TOP_PX + heightSum(1, n - 1, scale)
+          }
+        }
         dPin(`landed ${n}`)
         setCurrentPage(n)
         setPinnedTarget(null)
       }
     },
-    [pinnedTarget]
+    [pinnedTarget, findContainer, heightSum, scale]
   )
 
   const scrollToPage = useCallback(
@@ -311,10 +322,12 @@ export function useWindowedPages(
       if (!scrollContainerRef.current) findContainer()
       const container = scrollContainerRef.current
       if (!container) {
-        dPin(`pin ${target} (no container)`)
+        dPin(`pin ${target} (no container, deferring scroll)`)
+        pendingScrollTargetRef.current = target
         setPinnedTarget(target)
         return
       }
+      pendingScrollTargetRef.current = null
       // Compute desired scrollTop directly from prefix sums — works even for
       // pages that aren't currently rendered.
       const desired = INNER_PAD_TOP_PX + heightSum(1, target - 1, scale)
